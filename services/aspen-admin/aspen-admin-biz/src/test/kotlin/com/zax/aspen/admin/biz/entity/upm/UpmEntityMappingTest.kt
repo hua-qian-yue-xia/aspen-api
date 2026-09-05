@@ -1,5 +1,8 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
+import com.zax.aspen.common.core.enums.common.Gender
+import com.zax.aspen.common.core.enums.common.RiskLevel
 import org.babyfish.jimmer.meta.ImmutableType
 import org.babyfish.jimmer.sql.Column
 import org.babyfish.jimmer.sql.Table
@@ -55,11 +58,15 @@ class UpmEntityMappingTest {
     @Test
     fun `maps source defaults into metadata`() {
         val userType = ImmutableType.get(UpmUserEntity::class.java)
+        val permissionType = ImmutableType.get(UpmPermissionEntity::class.java)
 
         assertEquals("member", userType.getProp("userType").defaultValueRef.value)
         assertEquals("enabled", userType.getProp("status").defaultValueRef.value)
+        assertEquals(Gender.UNKNOWN, userType.getProp("gender").defaultValueRef.value)
         assertEquals(0, userType.getProp("failedLoginCount").defaultValueRef.value)
         assertEquals(false, userType.getProp("mustChangePassword").defaultValueRef.value)
+        assertEquals(EnabledStatus.ENABLED, permissionType.getProp("status").defaultValueRef.value)
+        assertEquals(RiskLevel.NORMAL, permissionType.getProp("riskLevel").defaultValueRef.value)
     }
 
     /** 验证用户展示字段保持 nickname 和 real_name 设计 */

@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.CreateAuditEntity
 import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
@@ -44,6 +45,6 @@ interface UpmDeptLeaderEntity : TenantScopedEntity, CreateAuditEntity {
     val sortOrder: Int
 
     /** 任职状态; disabled 保留历史记录供审计 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 }

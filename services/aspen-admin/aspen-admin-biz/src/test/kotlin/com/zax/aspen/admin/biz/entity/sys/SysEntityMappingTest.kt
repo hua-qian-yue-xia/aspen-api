@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.sys
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import org.babyfish.jimmer.meta.ImmutableType
 import org.babyfish.jimmer.sql.Column
 import org.babyfish.jimmer.sql.Default
@@ -56,12 +57,13 @@ class SysEntityMappingTest {
         val itemType = ImmutableType.get(SysDictItemEntity::class.java)
         val configType = ImmutableType.get(SysConfigEntity::class.java)
 
-        assertEquals("enabled", dictType.getProp("status").defaultValueRef.value)
+        assertEquals(EnabledStatus.ENABLED, dictType.getProp("status").defaultValueRef.value)
         assertEquals(false, dictType.getProp("isBuiltIn").defaultValueRef.value)
-        assertEquals("enabled", itemType.getProp("status").defaultValueRef.value)
+        assertEquals("common", dictType.getProp("dictGroup").defaultValueRef.value)
+        assertEquals(EnabledStatus.ENABLED, itemType.getProp("status").defaultValueRef.value)
         assertEquals(false, itemType.getProp("isDefault").defaultValueRef.value)
         assertEquals(0, itemType.getProp("sortOrder").defaultValueRef.value)
-        assertEquals("enabled", configType.getProp("status").defaultValueRef.value)
+        assertEquals(EnabledStatus.ENABLED, configType.getProp("status").defaultValueRef.value)
         assertEquals("string", configType.getProp("valueType").defaultValueRef.value)
         assertEquals(false, configType.getProp("isSensitive").defaultValueRef.value)
     }

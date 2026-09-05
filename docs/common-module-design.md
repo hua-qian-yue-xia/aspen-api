@@ -1,6 +1,6 @@
 # Aspen Common 基础模块设计
 
-> 文档状态：core/database/cache 首版已实现，`aspen-common-web` 待建  
+> 文档状态：core/gen/database/cache 首版已实现，`aspen-common-web` 待建  
 > 文档基线：2026-09-06  
 > 关联文档：[技术架构](./technical-architecture.md)
 
@@ -11,6 +11,7 @@
 ```text
 aspen-common/
 ├── aspen-common-core/
+├── aspen-common-gen/
 ├── aspen-common-database/
 └── aspen-common-cache/
 ```
@@ -20,6 +21,7 @@ aspen-common/
 ```text
 aspen-common-database -> aspen-common-core
 aspen-common-cache    -> aspen-common-core
+aspen-common-gen      -> aspen-common-core
 ```
 
 `core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。
@@ -56,7 +58,9 @@ aspen-common-cache    -> aspen-common-core
 | `AspenEnum` | 业务枚举统一契约：`code` 为唯一持久化与契约值，`description` 为默认中文描述，`color` 为可空标签颜色；枚举保持纯净不标注 Jimmer 注解 |
 | `EnumColor` | 标签颜色取值约定：5 个语义色与 11 个调色板色令牌，允许 `#RRGGBB` 逃生口，与 `sys_dict_item.color` 共用 |
 | `AspenEnums` | 按 `code` 反查工具：`codeOf` 未命中返回 null，`requireOf` 未命中抛非法参数异常 |
-| `Gender` / `EnabledStatus` | 性别（语义对齐 ISO/IEC 5218）与通用启停状态枚举 |
+| `enums.common.*` | 跨服务通用枚举子包：`Gender`（ISO/IEC 5218）、`EnabledStatus`、`SortDirection`（SQL 排序关键字）、`RiskLevel`（CVSS 严重度等级）；纳入条件与不纳入清单见《技术架构》12.4 节 |
+| `GenDict` | 枚举字典镜像声明注解（`gen` 包）：code/name/group 对应 `sys_dict` 的 `dict_code`/`dict_name`/`dict_group`, 仅标注 `AspenEnum` 枚举, 框架无关 |
+| `GenDictDescriptor` / `GenDictItemDescriptor` | 枚举字典扫描产物与跨服务上报模型（`gen` 包）, 构造时校验编码、分组格式与项值唯一, 可直接进入 HTTP 契约 |
 
 业务错误码仍归拥有者 `*-api/error/{group}`。成功 HTTP 响应直接返回 DTO/VO；后续 `aspen-common-web` 将 `BusinessException` 转换为 RFC 9457 Problem Details，并保留正确 HTTP 状态码。core 不提供 `R<T>` 或 `ApiResponse<T>`。
 
@@ -66,7 +70,7 @@ API 只有实际使用上述公共类型时才声明：
 
 ```kotlin
 dependencies {
-    api(project(":aspen-common-core"))
+    api(project(AspenProjects.COMMON_CORE))
 }
 ```
 
@@ -112,7 +116,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":aspen-common-database"))
+    implementation(project(AspenProjects.COMMON_DATABASE))
     ksp(libs.jimmer.ksp)
     runtimeOnly(libs.mysql.connector)
 }
@@ -201,19 +205,40 @@ val cached = cacheOperations.get<UserView>("upm-user", key)
 
 common-cache 第一版不包含分布式锁、幂等、限流、Redis Pub/Sub 或任务锁。可靠业务事件使用 RocketMQ；锁和幂等在明确一致性、超时、失败与恢复语义后建立独立模块。
 
-## 6. 服务接入与验收
+## 6. Gen
+
+包根为 `com.zax.aspen.common.gen`。公共生成工具模块, 第一版只提供枚举字典扫描:
+
+- `GenDictScanner`: 按包范围扫描标注 `@GenDict` 的 `AspenEnum` 枚举, 产出 `List<GenDictDescriptor>`; 校验 dictCode 全局唯一, 未标注或非枚举类型忽略。
+- `GenDictSink`: 目录投递 SPI; 使用方实现 `deliver(catalog)` 决定目录去向——Admin 的实现直接落库, 其他服务可实现远程上报到 Admin 的 internal 契约。
+- `AspenGenAutoConfiguration` + `AspenGenProperties` + 通用启动 Runner: `aspen.gen.dict.enabled` 开启且容器存在 `GenDictSink` 时, 启动扫描一次并把目录投递给全部 Sink; `mode` 支持 `create-missing` 与 `resync`, `base-packages` 默认 `com.zax.aspen`。
+- 落库不在本模块: Admin Biz 的 repository.sys/service.sys 消费目录写入 `sys_dict`/`sys_dict_item`, 其他服务经 admin-api 的 internal 契约上报; 模块因此不依赖 Jimmer、驱动或任何服务模块。
+
+```yaml
+aspen:
+  gen:
+    dict:
+      enabled: false
+      mode: create-missing
+      base-packages:
+        - com.zax.aspen
+```
+
+后续真正的代码生成能力 (如前端客户端生成) 落入本模块时, 必须同样遵守「只依赖 core、不触碰持久化」的边界。
+
+## 7. 服务接入与验收
 
 `api` 最多依赖 core；`database` 和 `cache` 只允许由实际运行的 `biz` 按需依赖。Admin Biz 已因 UPM 持久化模型引入 common-database、Jimmer KSP 和 MySQL 驱动，但仍未引入 common-cache。无外部数据库的上下文测试只在测试范围排除数据源与 Jimmer 自动装配，生产配置不允许借此绕过数据库依赖。
 
 根 Gradle 配置在依赖声明阶段执行以下边界校验，即使模块暂无源码也不能绕过：
 
 - core 禁止依赖其他项目模块、Spring、Jackson、Jimmer 或 Redis。
-- database/cache 只能依赖 core，二者不能互相依赖。
+- database/cache/gen 只能依赖 core, 三者不互相依赖。
 - 所有 common 模块禁止依赖 `services` 目录下的模块。
 - API 模块禁止依赖 database/cache、Jimmer、Spring Data、Redis 或 Spring Boot Starter。
 - 所有模块禁止 JPA/Hibernate、MyBatis/MyBatis-Plus、Seata 和 Dubbo，并禁止动态或变化版本。
 
-Testcontainers 的 JUnit Jupiter 和 MySQL 依赖别名已经登记在版本目录中，版本继续由 Spring Boot BOM 管理。首版 common 测试不连接外部 MySQL 或 Redis，因此不把未使用的 Testcontainers 依赖加入模块运行类路径；首个真实 Repository 集成测试落地时再按需使用。
+Testcontainers 的 JUnit Jupiter 和 MySQL 依赖别名已经登记在版本目录中，版本继续由 Spring Boot BOM 管理。Admin 的 @GenDict 播种已落地首个真实 Repository 集成测试, 使用 Testcontainers MySQL 执行迁移与写路径验证; 其余 common 测试仍不连接外部 MySQL 或 Redis。
 
 验收必须满足：
 

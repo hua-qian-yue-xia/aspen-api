@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.CreateAuditEntity
 import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
@@ -38,6 +39,6 @@ interface UpmPermissionApiEntity : TenantScopedEntity, CreateAuditEntity {
     val apiVersion: String?
 
     /** 映射状态; disabled 后该路由鉴权按未配置处理, 由安全策略决定放行或拒绝 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 }

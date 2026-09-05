@@ -119,14 +119,17 @@ rootProject.name = "aspen"
 
 // Admin 是一个微服务, 由普通契约 JAR 和唯一可运行 Biz 模块组成
 // 使用扁平 Gradle 项目名, services/aspen-admin 只作为源码目录分组, 不成为额外模块
+// 本文件先于 buildSrc 执行, 无法引用 AspenProjects 常量; 新增或改名模块时必须同步 buildSrc/src/main/kotlin/AspenProjects.kt
 include(
     ":aspen-common-core",
+    ":aspen-common-gen",
     ":aspen-common-database",
     ":aspen-common-cache",
     ":aspen-admin-api",
     ":aspen-admin-biz",
 )
 project(":aspen-common-core").projectDir = file("aspen-common/aspen-common-core")
+project(":aspen-common-gen").projectDir = file("aspen-common/aspen-common-gen")
 project(":aspen-common-database").projectDir = file("aspen-common/aspen-common-database")
 project(":aspen-common-cache").projectDir = file("aspen-common/aspen-common-cache")
 project(":aspen-admin-api").projectDir = file("services/aspen-admin/aspen-admin-api")

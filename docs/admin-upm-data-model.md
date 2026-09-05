@@ -54,7 +54,7 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/upm/
 - 实体直接组合 common 的 `MutableAuditEntity`（可更新表：完整审计、初始值为 `1` 的乐观锁、`deleted_at` 时间戳逻辑删除）或 `CreateAuditEntity`（不可变关系表：`created_at` 与 `created_by`）与 `TenantScopedEntity`（租户列），不创建业务包级纯组合接口。主键由各实体自行声明，公共映射不固定 ID 策略。租户条件由 common 的 `TenantFilter` 自动追加，业务查询不手写 `tenant_id`。
 - SQL 中的业务默认值通过 Jimmer `@Default` 同步，创建时间和发生时间使用 `@Default("now")` 生成部署域统一时区的 `LocalDateTime`；SQL 同时保留 `CURRENT_TIMESTAMP(3)`，保证非 Jimmer 写入也有数据库默认时间。Jimmer `0.11.7` 的 Kotlin 元数据在校验 `@DatabaseDefault` 时存在数组类型转换缺陷，本版不使用该注解。
 - 关系和历史表只保留 `created_at`、`created_by`；登录日志和授权变更日志不支持更新或逻辑删除。
-- 状态、来源、授权效果等字段首版使用 `String`，以保持数据库中的小写值不被 JVM 枚举名称改写。引入枚举时必须显式定义并测试持久化值转换。
+- 语义同构的启停状态字段与 `gender`、`risk_level` 已切换为 common-core 枚举（`EnabledStatus`、`Gender`、`RiskLevel`）, 持久化经 `AspenEnumProviders` 按 code 与数据库小写值互转, 数据零迁移; 用户、会话与用户角色授权的 `status` 因带锁定、撤销等域内生命周期仍保留 `String`, 待域枚举定义后切换; 来源、授权效果等取值开放的字段仍使用 `String`。
 
 ## 4. 租户与唯一性
 

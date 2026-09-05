@@ -18,8 +18,9 @@ java {
 }
 
 dependencies {
-    implementation(project(":aspen-admin-api"))
-    implementation(project(":aspen-common-database"))
+    implementation(project(AspenProjects.ADMIN_API))
+    implementation(project(AspenProjects.COMMON_DATABASE))
+    implementation(project(AspenProjects.COMMON_GEN))
 
     // 当前阶段只提供可编译, 可启动的最小 MVC 运行时, 不提前引入未使用的基础设施
     implementation(libs.spring.boot.starter.webmvc)
@@ -30,6 +31,9 @@ dependencies {
 
     testImplementation(libs.spring.boot.starter.webmvc.test)
     testImplementation(libs.kotlin.test.junit5)
+    // 首个真实写路径 (字典播种) 用 Testcontainers MySQL 验证迁移与幂等
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.testcontainers.mysql)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

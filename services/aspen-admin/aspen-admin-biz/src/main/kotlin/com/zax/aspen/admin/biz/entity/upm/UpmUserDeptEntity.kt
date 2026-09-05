@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.MutableAuditEntity
 import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
@@ -48,8 +49,8 @@ interface UpmUserDeptEntity : TenantScopedEntity, MutableAuditEntity {
     val leftAt: LocalDateTime?
 
     /** 任职状态; enabled 参与组织与授权, disabled 保留历史 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 
     /** 同部门内的展示顺序 */
     @Default("0")

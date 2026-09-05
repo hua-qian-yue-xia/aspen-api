@@ -1,7 +1,7 @@
 package com.zax.aspen.admin.biz.entity.sys
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.MutableAuditEntity
-import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
@@ -13,11 +13,12 @@ import org.babyfish.jimmer.sql.Table
  * 保存字典项的值、显示文本、层级关系和前端展示属性
  *
  * 典型场景: 下拉选项的 value/label 来源、详情页把存储值翻译为中文文本;
- * 省市区等树形字典通过 parentId 组织级联, 扁平字典 parentId 为空
+ * 省市区等树形字典通过 parentId 组织级联, 扁平字典 parentId 为空;
+ * 字典项是平台引用数据, 不做租户隔离
  */
 @Entity
 @Table(name = "sys_dict_item")
-interface SysDictItemEntity : TenantScopedEntity, MutableAuditEntity {
+interface SysDictItemEntity : MutableAuditEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val dictItemId: Long
@@ -49,6 +50,6 @@ interface SysDictItemEntity : TenantScopedEntity, MutableAuditEntity {
     val sortOrder: Int
 
     /** 字典项启停状态; disabled 后不再出现在下拉与翻译结果中, 但已保存的历史值保持不变 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 }

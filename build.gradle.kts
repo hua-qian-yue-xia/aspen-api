@@ -110,12 +110,12 @@ allprojects {
         dependencies.withType<ProjectDependency>().configureEach {
             val targetProjectPath = path
 
-            require(sourceProjectPath != ":aspen-common-core") {
+            require(sourceProjectPath != AspenProjects.COMMON_CORE) {
                 "$sourceProjectPath 不能依赖项目模块 $targetProjectPath"
             }
-            if (sourceProjectPath in setOf(":aspen-common-database", ":aspen-common-cache")) {
-                require(targetProjectPath == ":aspen-common-core") {
-                    "$sourceProjectPath 只能依赖 :aspen-common-core, 当前依赖为 $targetProjectPath"
+            if (sourceProjectPath in setOf(AspenProjects.COMMON_DATABASE, AspenProjects.COMMON_CACHE, AspenProjects.COMMON_GEN)) {
+                require(targetProjectPath == AspenProjects.COMMON_CORE) {
+                    "$sourceProjectPath 只能依赖 ${AspenProjects.COMMON_CORE}, 当前依赖为 $targetProjectPath"
                 }
             }
             require(
@@ -124,7 +124,7 @@ allprojects {
                 "common 模块不能依赖服务模块 $targetProjectPath"
             }
             if (sourceProjectPath.endsWith("-api")) {
-                require(targetProjectPath !in setOf(":aspen-common-database", ":aspen-common-cache")) {
+                require(targetProjectPath !in setOf(AspenProjects.COMMON_DATABASE, AspenProjects.COMMON_CACHE)) {
                     "API 模块不能依赖数据库或缓存实现模块 $targetProjectPath"
                 }
             }

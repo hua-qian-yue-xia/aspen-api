@@ -95,6 +95,7 @@ Spring Cloud Alibaba `2025.1.0.0` 正式版与 Spring Cloud `2025.1.x`、Spring 
 
 - 所有插件和依赖仓库只能在 `settings.gradle.kts` 声明，子模块新增 `repositories` 将直接导致构建失败。
 - 版本集中在 `gradle/libs.versions.toml`；Spring Cloud 与 Spring Cloud Alibaba 使用正式 BOM，不在单个 Starter 上覆盖组件版本。
+- 内部模块路径统一收敛到 buildSrc 的 `AspenProjects` 常量，模块依赖声明与根构建的架构边界守卫都引用它；Gradle 版本目录只管理第三方坐标，不支持项目依赖。路径字面量仅允许出现在 `settings.gradle.kts` 的 include 列表和 `AspenProjects` 本身，新增或改名模块时两处同步。
 - 中国大陆开发环境默认使用阿里云 Gradle Plugin 与 Maven Public 镜像，Maven Central 和 Gradle Plugin Portal 仅作为制品未同步时的完整性回退。
 - Gradle Wrapper 使用腾讯云分发镜像，并使用官方 SHA-256 校验压缩包，不能仅信任镜像内容。
 - 自有机房应建设 Nexus 或 Artifactory Maven Group，同时代理 Maven Central 与 Gradle Plugin Portal。通过 `ASPEN_MAVEN_REPOSITORY_URL`、`ASPEN_MAVEN_REPOSITORY_USERNAME`、`ASPEN_MAVEN_REPOSITORY_PASSWORD` 注入，不把凭据提交到仓库。
@@ -445,7 +446,7 @@ RocketMQ Consumer -> Service
 ### 7.8 源码与可见性规则
 
 1. Kotlin `package` 必须与目录完全一致，禁止把文件放在一个目录却声明为另一个层的包。
-2. 每个文件只声明一个主要顶级类型，文件名与主要类型名一致；仅允许与该类型强相关的小型私有类型同文件存在。
+2. 源文件按类型分级组织：Jimmer 模型类型（`@Entity`、`@MappedSuperclass`、`@Embeddable`、`@Immutable`）每个文件只能声明一个且文件名与类型名一致，这是 KSP 的编译期硬约束；被其他文件引用的 `public` 顶层类型各自独占同名文件以保证按类型名可定位，`sealed` 类型及其直接子类型允许放在以 sealed 根命名的同一文件；`private`/`internal` 辅助类型、`typealias` 与主题内聚的顶层函数、扩展函数可以按 Kotlin 官方约定同文件共存，多声明文件以内容命名并控制在数百行以内；禁止把多个无关公开类型堆入 `Utils.kt`、`Models.kt` 之类的收容文件。
 3. `api` 中的契约类型必须是公开类型；`biz` 类型默认使用最小可见性，只有 Spring、Jimmer KSP、序列化或跨包协作确实需要时才扩大可见性。
 4. `biz` 包根目录不直接堆放业务类，除规定的一级目录外不得自行扩展新的技术层。
 5. Spring Bean 统一使用构造器注入和只读 `val`，禁止字段注入、`lateinit` 注入和静态 Service Locator。
@@ -877,15 +878,26 @@ Admin UPM 的字段和表设计见《[Admin UPM 数据模型](./admin-upm-data-m
 
 - 枚举定义保持纯净, 不标注任何 Jimmer 注解, 因此可以被 `api` 契约直接引用; 持久化映射由 common-database 的 `AspenEnumProviders` 桥接, 只使用 `code` 与数据库小写字符串互转, 未知存储值拒绝转换; `description` 与 `color` 不参与持久化。业务服务通过 `aspen.database.enums.base-packages`（默认 `com.zax.aspen`）声明扫描范围, 转换器自动注册进 Jimmer。
 - 按 `code` 反查统一使用 `AspenEnums.codeOf`（未命中返回 null）与 `AspenEnums.requireOf`（未命中抛出携带枚举名的非法参数异常）, 禁止各枚举重复编写 companion 反查方法。
-- `description` 是随代码发布的默认展示描述, 必须为非空中文, 直接用于界面、日志与错误消息; 需要运营定制文案时由 `sys_dict` 覆盖展示, 字典只能覆盖描述, 不能改变 code 语义。同一个值域只能以枚举或字典之一作为权威来源, 禁止两边同时配置。
+- `description` 是随代码发布的默认展示描述, 必须为非空中文, 直接用于界面、日志与错误消息; 需要运营定制文案时由 `sys_dict` 覆盖展示, 字典只能覆盖描述, 不能改变 code 语义, 且覆盖是平台级全局生效——字典表是全局引用数据, 不做租户隔离, 将来出现按租户定制文案的真实需求时以独立覆盖表扩展。同一个值域只能以枚举或字典之一作为权威来源, 禁止两边同时配置。
 - `color` 取值为 `EnumColor` 调色板令牌（5 个语义色 `default/primary/success/warning/danger` 与 11 个调色板色 `red/volcano/orange/gold/lime/green/cyan/blue/geekblue/purple/magenta`）或 `#RRGGBB` 十六进制色值, 与 `sys_dict_item.color` 共用同一套约定; 前端按令牌映射到自身组件库样式, 后端不描述具体视觉实现; 无着色需求时为 null。
-- 分包归属: 跨服务通用枚举（`AspenEnum`、`EnumColor`、`AspenEnums`、`Gender`、`EnabledStatus`）位于 common-core 的 `enums` 包; 对外契约的域枚举位于提供方 `api/enums/{group}`; 纯内部状态机的域枚举位于 `biz` 对应业务组。
+- 分包归属: common-core 的 `enums` 包只放契约与工具（`AspenEnum`、`EnumColor`、`AspenEnums`）, 跨服务通用枚举统一位于其 `enums.common` 子包, 由 common-core 测试强制检查包位置; 对外契约的域枚举位于提供方 `api/enums/{group}`; 纯内部状态机的域枚举位于 `biz` 对应业务组。
+- 进入 `enums.common` 必须同时满足两个条件: 取值有国际标准或业界事实标准依据、且至少两个服务或业务组会使用同一语义; 新增时必须登记到 common-core 的枚举契约测试。首版通用枚举清单如下:
+
+| 枚举 | 取值 | 依据 |
+| --- | --- | --- |
+| `Gender` | unknown / male / female / not_applicable | ISO/IEC 5218（0/1/2/9） |
+| `EnabledStatus` | enabled / disabled | 全库启停字段的既有值 |
+| `SortDirection` | asc / desc | SQL 标准排序关键字, 与 `PageQuery` 配套 |
+| `RiskLevel` | low / normal / high / critical | CVSS 严重度等级的事实标准, 供权限点、审计与告警统一风险表达 |
+
+- 评估后明确不纳入通用枚举的取值: 国家（ISO 3166）、货币（ISO 4217）、语言（ISO 639）数量大且随时间变化, 使用字典表或 `java.util.Currency` / `java.util.Locale`; 星期与月份（ISO 8601）直接使用 `java.time.DayOfWeek` / `java.time.Month`; 优先级、审批状态、操作类型等各域值域不同, 待真实使用方出现后按域定义, 不预先抽象为通用枚举。
 - 枚举与字典的边界: 代码逻辑依赖的稳定取值（分支判断、状态机、跨服务契约）使用 Kotlin 枚举, 编译期安全; 运营可配置的取值集合（下拉选项、可增删的分类）使用 `sys_dict`。逻辑值禁止进字典。
 - 按域定义精确枚举: `enabled/disabled` 语义真正同构的字段共享 `EnabledStatus`; 域内有额外生命周期时（如用户锁定、会话撤销）必须定义域枚举, 禁止向通用枚举追加值形成上帝枚举。
 - `code` 一经发布即稳定契约: 禁止修改既有值或删除枚举项, 只能新增; 同一枚举内 code 唯一且为小写下划线格式, `description` 非空中文, `color` 合法, 均由 common-core 测试强制检查。
 - 性别使用 `Gender`, 取值语义对齐 ISO/IEC 5218（unknown/male/female/not_applicable 对应 0/1/2/9）, 存储保持小写字符串与全库风格统一, 性别展示不着色。
 - 是/否语义使用 Kotlin `Boolean`, 不定义 YesNo 类枚举。
-- 实体状态字段从 String 切换为枚举时, 数据库列值必须与 code 完全一致, 切换前后数据零迁移。
+- 实体状态字段从 String 切换为枚举时, 数据库列值必须与 code 完全一致, 切换前后数据零迁移。Jimmer `@Default` 字面量按枚举 `name` 而非 code 解析（如 `@Default("ENABLED")` 对应 `EnabledStatus.ENABLED`）, 持久化写出时仍经标量转换器落为小写 code。
+- 枚举需要前端下拉渲染或值翻译展示时, 以 `@GenDict(code, name, group)` 声明字典镜像, 由 common-gen 扫描并幂等播种进 `sys_dict`/`sys_dict_item` (`is_built_in=true`), 播种规则、模式与开关见《Admin SYS 数据模型》; 枚举仍是唯一权威取值来源, 生成字典的项禁止运营增删值; 注解与目录模型位于 common-core `gen` 包, 保持框架无关。
 
 ## 13. Nacos 单节点与配置架构
 

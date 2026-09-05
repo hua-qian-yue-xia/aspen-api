@@ -1,7 +1,12 @@
 package com.zax.aspen.admin.biz.bootstrap
 
+import org.babyfish.jimmer.sql.kt.KSqlClient
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.context.TestConfiguration
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
 
 /** 验证 Admin Web 装配可在不连接外部基础设施时完成 */
 @SpringBootTest(
@@ -13,9 +18,18 @@ import org.springframework.boot.test.context.SpringBootTest
             "org.babyfish.jimmer.spring.cfg.JimmerAutoConfiguration",
     ],
 )
+@Import(AspenAdminApplicationTest.TestTools::class)
 class AspenAdminApplicationTest {
     /** 验证测试隔离数据库自动装配后仍可加载 Admin 应用上下文 */
     @Test
     fun contextLoadsWithoutDatabaseOrRedis() {
+    }
+
+    /** 无数据库上下文的装配占位 */
+    @TestConfiguration
+    class TestTools {
+        /** 常驻的 sys 字典仓储需要 KSqlClient, 用 Mock 满足装配, 不触发真实查询 */
+        @Bean("aspenTestSqlClient")
+        fun aspenTestSqlClient(): KSqlClient = Mockito.mock(KSqlClient::class.java)
     }
 }

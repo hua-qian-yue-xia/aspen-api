@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.MutableAuditEntity
 import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
@@ -58,8 +59,8 @@ interface UpmDeptEntity : TenantScopedEntity, MutableAuditEntity {
     val isVirtual: Boolean
 
     /** 部门状态; disabled 后不参与授权与通讯录, 子部门不受影响 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 
     /** 同级部门展示顺序 */
     @Default("0")

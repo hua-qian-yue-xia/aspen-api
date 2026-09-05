@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.MutableAuditEntity
 import org.babyfish.jimmer.sql.Default
 import org.babyfish.jimmer.sql.Entity
@@ -47,8 +48,8 @@ interface UpmTenantEntity : MutableAuditEntity {
     val timezone: String
 
     /** 租户状态; disabled 后该租户全部用户登录被拒绝, 已登录会话由 Auth 按策略失效 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 
     /** 租户有效期起点; 为空表示开通即生效; 登录与授权时校验 */
     val validFrom: LocalDateTime?

@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.MutableAuditEntity
 import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
@@ -56,8 +57,8 @@ interface UpmRoleEntity : TenantScopedEntity, MutableAuditEntity {
     val permissionVersion: Int
 
     /** 角色状态; disabled 后该角色的授权整体失效 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 
     /** 角色有效期起点; 授权时校验; 为空表示立即生效 */
     val validFrom: LocalDateTime?

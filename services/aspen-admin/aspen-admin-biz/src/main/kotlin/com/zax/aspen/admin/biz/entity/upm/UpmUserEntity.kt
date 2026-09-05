@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.Gender
 import com.zax.aspen.common.database.model.MutableAuditEntity
 import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
@@ -73,9 +74,9 @@ interface UpmUserEntity : TenantScopedEntity, MutableAuditEntity {
     /** 手机验证时间; 为空表示未验证; 影响短信找回密码等高敏感操作 */
     val mobileVerifiedAt: LocalDateTime?
 
-    /** 性别, 约定取值为 male/female/unknown; 默认 unknown 避免强制采集 */
-    @Default("unknown")
-    val gender: String
+    /** 性别; 默认 UNKNOWN 避免强制采集, 取值与语义由 Gender 枚举定义 */
+    @Default("UNKNOWN")
+    val gender: Gender
 
     /** 用户选择的语言; 为空时回退租户 locale */
     val locale: String?

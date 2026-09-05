@@ -19,12 +19,12 @@ class SysMigrationTest {
         assertEquals(3, Regex("COLLATE = utf8mb4_0900_ai_ci", RegexOption.IGNORE_CASE).findAll(migrationSql).count())
     }
 
-    /** 验证租户唯一约束、排序索引和外键删除策略存在 */
+    /** 验证字典全局唯一约束、租户参数唯一约束、排序索引和外键删除策略存在 */
     @Test
     fun `keeps tenant and relationship constraints`() {
         listOf(
-            "uk_sys_dict_tenant_code",
-            "uk_sys_dict_item_tenant_dict_value",
+            "uk_sys_dict_code",
+            "uk_sys_dict_item_dict_value",
             "uk_sys_config_tenant_key",
             "idx_sys_dict_item_dict_sort",
             "idx_sys_dict_item_parent",

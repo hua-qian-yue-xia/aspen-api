@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.MutableAuditEntity
 import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
@@ -110,6 +111,6 @@ interface UpmMenuEntity : TenantScopedEntity, MutableAuditEntity {
     val routeMetadata: Map<String, Any?>?
 
     /** 菜单状态; 与 isEnabled 语义分工: status 是业务启停, isEnabled 是导航开关 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 }

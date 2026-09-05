@@ -17,7 +17,7 @@ java {
 
 dependencies {
     api(platform(libs.spring.boot.dependencies))
-    api(project(":aspen-common-core"))
+    api(project(AspenProjects.COMMON_CORE))
 
     // Redis 和 Jackson 只实现公共缓存接口, 不作为 common-cache 的公共 API 暴露
     implementation(libs.spring.boot.autoconfigure)

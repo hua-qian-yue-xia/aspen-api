@@ -7,6 +7,7 @@ Aspen 是一套微服务基础设施项目，提供公共基础模块（core / d
 | 模块 | 说明 |
 | --- | --- |
 | `aspen-common-core` | 错误码、分页等公共类型与配置 |
+| `aspen-common-gen` | 枚举字典生成与启动播种（@GenDict 扫描上报） |
 | `aspen-common-database` | 数据库访问封装与 Jimmer 基类 |
 | `aspen-common-cache` | Redis 缓存操作封装 |
 | `aspen-admin-api` | Admin 服务对外契约（普通 JAR） |

@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.MutableAuditEntity
 import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
@@ -39,8 +40,8 @@ interface UpmUserCredentialEntity : TenantScopedEntity, MutableAuditEntity {
     val hashVersion: String?
 
     /** 凭证状态; disabled 后该凭证登录被拒绝, 保留用于历史审计 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 
     /** 凭证过期时间; 为空表示长期有效; 过期后登录要求先更新凭证 */
     val expiresAt: LocalDateTime?

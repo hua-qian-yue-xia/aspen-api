@@ -1,6 +1,7 @@
 package com.zax.aspen.common.core.enums.common
 
 import com.zax.aspen.common.core.enums.AspenEnum
+import com.zax.aspen.common.core.gen.GenDict
 
 /**
  * 性别枚举
@@ -9,6 +10,7 @@ import com.zax.aspen.common.core.enums.AspenEnum
  * 存储采用小写字符串以与全库列值风格统一; not_applicable 用于企业账户等
  * 性别不适用的主体; 性别展示不着色
  */
+@GenDict(code = "gender", name = "性别", group = "common")
 enum class Gender(
     override val code: String,
     override val description: String,

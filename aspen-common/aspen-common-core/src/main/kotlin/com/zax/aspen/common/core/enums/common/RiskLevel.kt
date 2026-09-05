@@ -2,6 +2,7 @@ package com.zax.aspen.common.core.enums.common
 
 import com.zax.aspen.common.core.enums.AspenEnum
 import com.zax.aspen.common.core.enums.EnumColor
+import com.zax.aspen.common.core.gen.GenDict
 
 /**
  * 风险等级
@@ -9,6 +10,7 @@ import com.zax.aspen.common.core.enums.EnumColor
  * 分级参考 CVSS 严重度等级的事实标准, 用于权限点、操作审计与告警的统一风险表达;
  * high 及以上等级触发二次确认、审批或强制审计等加强控制, 具体控制动作由各使用方定义
  */
+@GenDict(code = "risk_level", name = "风险等级", group = "common")
 enum class RiskLevel(
     override val code: String,
     override val description: String,

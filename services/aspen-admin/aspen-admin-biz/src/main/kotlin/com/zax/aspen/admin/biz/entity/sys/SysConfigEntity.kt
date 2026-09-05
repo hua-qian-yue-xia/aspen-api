@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.entity.sys
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.MutableAuditEntity
 import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
@@ -44,6 +45,6 @@ interface SysConfigEntity : TenantScopedEntity, MutableAuditEntity {
     val isSensitive: Boolean
 
     /** 参数启停状态; disabled 后读取按默认值兜底, 不返回已禁用参数值 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 }

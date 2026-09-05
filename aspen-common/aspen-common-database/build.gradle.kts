@@ -18,7 +18,7 @@ java {
 
 dependencies {
     api(platform(libs.spring.boot.dependencies))
-    api(project(":aspen-common-core"))
+    api(project(AspenProjects.COMMON_CORE))
 
     // 业务 Repository 需要直接编译 KSqlClient, Entity 注解和 Kotlin DSL, 因此只公开 Jimmer SQL Kotlin API
     api(libs.jimmer.sql.kotlin)

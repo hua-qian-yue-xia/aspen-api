@@ -2,3 +2,9 @@ spring:
   application:
     # upm/sys 共享同一个服务名, 进程和 Docker 镜像
     name: aspen-admin
+
+aspen:
+  gen:
+    dict:
+      # 枚举字典播种只用于开发与联调, 生产环境禁止开启
+      enabled: false

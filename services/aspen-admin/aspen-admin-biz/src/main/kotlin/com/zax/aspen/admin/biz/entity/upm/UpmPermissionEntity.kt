@@ -1,5 +1,7 @@
 package com.zax.aspen.admin.biz.entity.upm
 
+import com.zax.aspen.common.core.enums.common.EnabledStatus
+import com.zax.aspen.common.core.enums.common.RiskLevel
 import com.zax.aspen.common.database.model.MutableAuditEntity
 import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
@@ -38,17 +40,17 @@ interface UpmPermissionEntity : TenantScopedEntity, MutableAuditEntity {
     /** 资源上的动作, 例如 create/read/update/delete/export */
     val action: String
 
-    /** 风险等级, 约定取值为 normal/high/critical; high 及以上触发二次确认或审批 */
-    @Default("normal")
-    val riskLevel: String
+    /** 风险等级; high 及以上触发二次确认或审批, 取值与语义由 RiskLevel 枚举定义 */
+    @Default("NORMAL")
+    val riskLevel: RiskLevel
 
     /** 强制审计标记; 使用该权限的操作必须写入授权变更日志 */
     @Default("false")
     val requiresAudit: Boolean
 
     /** 权限状态; disabled 后授权关系保留但鉴权全部拒绝 */
-    @Default("enabled")
-    val status: String
+    @Default("ENABLED")
+    val status: EnabledStatus
 
     /** 权限用途说明, 描述典型使用场景与影响范围 */
     val description: String?
