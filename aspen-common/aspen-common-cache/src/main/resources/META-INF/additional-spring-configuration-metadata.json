@@ -1,0 +1,61 @@
+{
+  "groups": [
+    {
+      "name": "aspen.cache",
+      "type": "com.zax.aspen.common.cache.autoconfigure.AspenCacheProperties",
+      "description": "Aspen Redis 缓存命名空间, 序列化和 TTL 约定"
+    },
+    {
+      "name": "aspen.cache.definitions",
+      "type": "java.util.Map<java.lang.String,com.zax.aspen.common.cache.autoconfigure.AspenCacheProperties$Definition>",
+      "description": "以稳定缓存名称为键的显式缓存定义"
+    }
+  ],
+  "properties": [
+    {
+      "name": "aspen.cache.enabled",
+      "type": "java.lang.Boolean",
+      "defaultValue": true,
+      "description": "是否启用 Aspen Redis 缓存自动配置"
+    },
+    {
+      "name": "aspen.cache.prefix",
+      "type": "java.lang.String",
+      "defaultValue": "aspen",
+      "description": "所有受控 Redis Key 的首段前缀"
+    },
+    {
+      "name": "aspen.cache.environment",
+      "type": "java.lang.String",
+      "defaultValue": "local",
+      "description": "用于隔离 Redis Key 的部署环境标识"
+    },
+    {
+      "name": "aspen.cache.service",
+      "type": "java.lang.String",
+      "description": "服务标识, 未配置时使用 spring.application.name"
+    },
+    {
+      "name": "aspen.cache.allowed-groups",
+      "type": "java.util.Set<java.lang.String>",
+      "description": "当前服务允许使用的缓存业务组白名单, 空集合表示不限制"
+    },
+    {
+      "name": "aspen.cache.allow-undeclared-caches",
+      "type": "java.lang.Boolean",
+      "defaultValue": false,
+      "description": "是否允许 RedisCacheManager 创建配置中未声明的 Cache"
+    },
+    {
+      "name": "aspen.cache.default-ttl",
+      "type": "java.time.Duration",
+      "description": "允许未声明 Cache 时必须提供的正数默认 TTL"
+    },
+    {
+      "name": "aspen.cache.max-entry-size",
+      "type": "org.springframework.util.unit.DataSize",
+      "defaultValue": "1MB",
+      "description": "单个缓存值序列化后的最大容量"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+spring:
+  application:
+    # upm/sys 共享同一个服务名, 进程和 Docker 镜像
+    name: aspen-admin

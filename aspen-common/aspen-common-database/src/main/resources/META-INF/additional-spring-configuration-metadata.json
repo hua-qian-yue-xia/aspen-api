@@ -1,0 +1,41 @@
+{
+  "groups": [
+    {
+      "name": "aspen.database",
+      "type": "com.zax.aspen.common.database.autoconfigure.AspenDatabaseProperties",
+      "description": "Aspen 数据库安全和审计约定"
+    }
+  ],
+  "properties": [
+    {
+      "name": "aspen.database.audit.enabled",
+      "type": "java.lang.Boolean",
+      "defaultValue": true,
+      "description": "是否启用公共 Jimmer 审计拦截器"
+    },
+    {
+      "name": "aspen.database.pagination.default-size",
+      "type": "java.lang.Integer",
+      "defaultValue": 20,
+      "description": "DatabaseLimits 提供的默认分页数量"
+    },
+    {
+      "name": "aspen.database.pagination.max-size",
+      "type": "java.lang.Integer",
+      "defaultValue": 200,
+      "description": "DatabaseLimits 允许的最大分页数量"
+    },
+    {
+      "name": "aspen.database.batch.default-size",
+      "type": "java.lang.Integer",
+      "defaultValue": 100,
+      "description": "默认数据库批处理数量"
+    },
+    {
+      "name": "aspen.database.batch.max-size",
+      "type": "java.lang.Integer",
+      "defaultValue": 1000,
+      "description": "最大数据库批处理数量"
+    }
+  ]
+}
