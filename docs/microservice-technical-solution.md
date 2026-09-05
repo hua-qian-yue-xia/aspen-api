@@ -182,7 +182,7 @@ aspen/
 │   └── aspen-task-biz/             # Quartz 集群、执行记录和任务投递
 └── services/
     ├── aspen-admin/
-    │   ├── aspen-admin-api/        # Admin 契约，按 upm/sys 业务组组织
+    │   ├── aspen-admin-api/        # Admin 契约，契约类型目录内按 upm/sys 业务组归档
     │   └── aspen-admin-biz/        # 单一 Admin 运行和部署单元
     └── <business-service>/
         ├── <business-service>-api/ # DTO、VO、Feign、事件和任务命令契约
@@ -198,7 +198,7 @@ aspen/
 - 单体启动器可以用于本地开发，但不能让业务模块形成反向依赖。
 - 普通业务 `biz` 禁止 `task/job/scheduler/security` 私有目录；调度集中到 Task，安全实现集中到 Gateway/Auth/Common Security。
 
-Admin 采用复合业务服务模式：`aspen-admin-api` 与 `aspen-admin-biz` 是 Gradle 边界，`upm` 与 `sys` 是源码业务组，不是 Nacos 服务或 Docker 部署单元。`api` 先按 `upm/sys` 分组、组内再按 DTO/VO 契约目录组织；`biz` 先按 Controller/Service/Repository MVC 层组织、层内再按 `upm/sys` 业务组归档。
+Admin 采用复合业务服务模式：`aspen-admin-api` 与 `aspen-admin-biz` 是 Gradle 边界，`upm` 与 `sys` 是源码业务组，不是 Nacos 服务或 Docker 部署单元。`api` 先按 DTO/VO 契约类型目录组织、目录内再按 `upm/sys` 业务组归档；`biz` 先按 Controller/Service/Repository MVC 层组织、层内再按 `upm/sys` 业务组归档。
 
 复合服务约束：
 

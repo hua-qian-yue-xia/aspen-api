@@ -1,50 +1,62 @@
 package com.zax.aspen.admin.biz.entity.upm
 
-import org.babyfish.jimmer.sql.Column
+import com.zax.aspen.common.database.model.CreateAuditEntity
+import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
 import org.babyfish.jimmer.sql.Entity
+import org.babyfish.jimmer.sql.GeneratedValue
+import org.babyfish.jimmer.sql.GenerationType
+import org.babyfish.jimmer.sql.Id
 import org.babyfish.jimmer.sql.Table
-import java.time.Instant
+import java.time.LocalDateTime
 
-/** 保存用户角色授权范围、来源、周期和撤销轨迹 */
+/**
+ * 保存用户角色授权范围、来源、周期和撤销轨迹
+ *
+ * 典型场景: 用户权限计算的数据源; 撤销不物理删除而是记录撤销人与时间, 供审计追溯
+ */
 @Entity
 @Table(name = "upm_user_role")
-interface UpmUserRoleEntity : UpmCreationEntity {
-    @Column(name = "user_id")
+interface UpmUserRoleEntity : TenantScopedEntity, CreateAuditEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    val userRoleId: Long
+
+    /** 被授权用户主键 */
     val userId: Long
 
-    @Column(name = "role_id")
+    /** 授权角色主键 */
     val roleId: Long
 
-    @Column(name = "scope_dept_id")
+    /** 数据范围覆盖部门主键; 为空表示使用角色默认数据范围; 非空时仅在该部门范围内生效 */
     val scopeDeptId: Long?
 
-    @Column(name = "grant_source")
+    /** 授权来源, 约定取值为 manual/import/api, 区分管理员手工与系统批量授权 */
     @Default("manual")
     val grantSource: String
 
-    @Column(name = "status")
+    /** 授权状态; revoked 表示已撤销; enabled 之外的状态不参与权限计算 */
     @Default("enabled")
     val status: String
 
-    @Column(name = "valid_from")
-    val validFrom: Instant?
+    /** 授权生效起点; 支持未来生效的预授权; 为空表示立即生效 */
+    val validFrom: LocalDateTime?
 
-    @Column(name = "valid_to")
-    val validTo: Instant?
+    /** 授权失效终点; 到期自动失效; 为空表示长期有效 */
+    val validTo: LocalDateTime?
 
-    @Column(name = "granted_by")
-    val grantedBy: Long?
+    /** 授权人主体标识; 系统自动授权时为服务身份字符串 */
+    val grantedBy: String?
 
-    @Column(name = "grant_reason")
+    /** 授权原因, 例如「入职默认角色」「项目临时授权」; 审计与到期清理判断使用 */
     val grantReason: String?
 
-    @Column(name = "revoked_at")
-    val revokedAt: Instant?
+    /** 撤销时间; 为空表示未撤销; 设置后授权失效但记录保留 */
+    val revokedAt: LocalDateTime?
 
-    @Column(name = "revoked_by")
-    val revokedBy: Long?
+    /** 撤销人主体标识; 审计追溯使用 */
+    val revokedBy: String?
 
-    @Column(name = "revoke_reason")
+    /** 撤销原因; 审计与误撤销恢复判断使用 */
     val revokeReason: String?
 }

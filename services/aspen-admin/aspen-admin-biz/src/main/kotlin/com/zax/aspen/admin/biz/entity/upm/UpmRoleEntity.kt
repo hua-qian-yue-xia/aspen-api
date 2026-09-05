@@ -1,58 +1,70 @@
 package com.zax.aspen.admin.biz.entity.upm
 
-import org.babyfish.jimmer.sql.Column
+import com.zax.aspen.common.database.model.MutableAuditEntity
+import com.zax.aspen.common.database.model.TenantScopedEntity
 import org.babyfish.jimmer.sql.Default
 import org.babyfish.jimmer.sql.Entity
+import org.babyfish.jimmer.sql.GeneratedValue
+import org.babyfish.jimmer.sql.GenerationType
+import org.babyfish.jimmer.sql.Id
 import org.babyfish.jimmer.sql.Table
-import java.time.Instant
+import java.time.LocalDateTime
 
-/** 保存角色定义、默认数据范围和权限缓存版本 */
+/**
+ * 保存角色定义、默认数据范围和权限缓存版本
+ *
+ * 典型场景: 角色管理与授权; 用户的实际权限由角色、直接授权与拒绝项合并计算
+ */
 @Entity
 @Table(name = "upm_role")
-interface UpmRoleEntity : UpmMutableEntity {
-    @Column(name = "role_code")
+interface UpmRoleEntity : TenantScopedEntity, MutableAuditEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    val roleId: Long
+
+    /** 角色编码, 租户内唯一; 业务系统以编码引用角色, 创建后不可修改 */
     val roleCode: String
 
-    @Column(name = "name")
+    /** 角色名称, 管理界面展示与搜索 */
     val name: String
 
-    @Column(name = "role_type")
+    /** 角色类型, 约定取值为 business/system/api 等; 系统类型不参与用户分配 */
     @Default("business")
     val roleType: String
 
-    @Column(name = "owner_dept_id")
+    /** 角色归属部门主键; 部门管理员只能分配本部门拥有的角色; 为空表示租户级角色 */
     val ownerDeptId: Long?
 
-    @Column(name = "data_scope")
+    /** 默认数据范围, 约定取值为 self/dept/dept_and_children/custom/all; custom 时按 upm_role_dept 展开 */
     @Default("self")
     val dataScope: String
 
-    @Column(name = "is_built_in")
+    /** 内置角色标记; 系统运行依赖的角色禁止删除, 例如租户管理员 */
     @Default("false")
     val isBuiltIn: Boolean
 
-    @Column(name = "is_assignable")
+    /** 可分配标记; false 时普通管理员不能把该角色授予用户, 仅系统自动授予 */
     @Default("true")
     val isAssignable: Boolean
 
-    @Column(name = "priority")
+    /** 角色优先级; 多角色数据范围冲突时取大者; 数值越大优先级越高 */
     @Default("0")
     val priority: Int
 
-    @Column(name = "permission_version")
+    /** 角色权限缓存版本; 角色权限变更时递增, 用于失效引用该角色的授权缓存 */
     @Default("1")
     val permissionVersion: Int
 
-    @Column(name = "status")
+    /** 角色状态; disabled 后该角色的授权整体失效 */
     @Default("enabled")
     val status: String
 
-    @Column(name = "valid_from")
-    val validFrom: Instant?
+    /** 角色有效期起点; 授权时校验; 为空表示立即生效 */
+    val validFrom: LocalDateTime?
 
-    @Column(name = "valid_to")
-    val validTo: Instant?
+    /** 角色有效期终点; 到期后授权失效; 为空表示长期有效 */
+    val validTo: LocalDateTime?
 
-    @Column(name = "description")
+    /** 角色描述, 说明角色的用途与使用范围 */
     val description: String?
 }

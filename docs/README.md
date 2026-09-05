@@ -11,6 +11,7 @@
 | [technical-architecture.md](./technical-architecture.md) | 工程结构与代码组织规范 | 模块怎么拆、api/biz 边界、目录与命名、依赖方向、架构测试与验收 | 不重复组件选型理由，只引用技术方案结论 |
 | [common-module-design.md](./common-module-design.md) | 公共基础模块 API 细节 | core/database/cache 提供哪些类型和配置键、如何接入与验收 | 不包含业务服务和业务数据设计 |
 | [admin-upm-data-model.md](./admin-upm-data-model.md) | Admin UPM 数据模型 | UPM 有哪些表、Jimmer 映射约定、租户唯一性与安全字段边界 | 不包含 Controller/Service 等运行实现设计 |
+| [admin-sys-data-model.md](./admin-sys-data-model.md) | Admin SYS 数据模型 | SYS 字典与参数表结构、内置与敏感标记、可用性语义 | 不包含 Controller/Service 等运行实现设计 |
 
 ## 2. 推荐阅读顺序
 
@@ -19,6 +20,7 @@
 3. **[技术架构](./technical-architecture.md)**：掌握 api/biz 拆分、目录规范、依赖规则和架构测试基线，这是写代码前必读的一篇。
 4. **[Common 模块设计](./common-module-design.md)**：开发中需要错误码、分页、Jimmer 基类或 Redis 缓存封装时查阅。
 5. **[Admin UPM 数据模型](./admin-upm-data-model.md)**：参与 Admin UPM 持久化开发时查阅。
+6. **[Admin SYS 数据模型](./admin-sys-data-model.md)**：参与 Admin SYS 字典与参数持久化开发时查阅。
 
 ## 3. 主题权威规则
 
@@ -33,6 +35,7 @@
 | 统一任务服务 Quartz 语义 | [technical-architecture.md](./technical-architecture.md) 14.1 节 |
 | 公共模块类型、配置键与缓存操作语义 | [common-module-design.md](./common-module-design.md) |
 | UPM 表结构与迁移约定 | [admin-upm-data-model.md](./admin-upm-data-model.md) |
+| SYS 字典与参数表结构 | [admin-sys-data-model.md](./admin-sys-data-model.md) |
 
 新增文档时必须先在本目录登记职责边界；与既有文档方向重叠的内容应合并进权威文档，而不是新建一篇相似主题。
 

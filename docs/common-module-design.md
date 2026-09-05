@@ -1,5 +1,9 @@
 # Aspen Common 基础模块设计
 
+> 文档状态：core/database/cache 首版已实现，`aspen-common-web` 待建  
+> 文档基线：2026-09-06  
+> 关联文档：[技术架构](./technical-architecture.md)
+
 ## 1. 目的与边界
 
 `aspen-common` 为 `services` 下的微服务提供稳定、可选择的基础能力，不是一个包含所有依赖的公共工具包。第一版包含：
@@ -20,7 +24,7 @@ aspen-common-cache    -> aspen-common-core
 
 `core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。
 
-源码注释遵守项目统一规范：注释正文使用中文，专有名称保留原文，标点使用英文字符，句尾不加句号。类、接口、枚举、对象、字段和方法必须有说明职责或约束的有效 KDoc，重要实现边界补充行注释。Jimmer 简单数据库字段是唯一例外，已有清晰 `@Column(name = "...")` 时不重复添加字段名翻译式注释；关联映射、计算属性和非直观约束仍必须说明。完整规则和示例见《技术架构》7.8 节。
+源码注释遵守项目统一规范：注释正文使用中文，专有名称保留原文，标点使用英文字符，句尾不加句号。类、接口、枚举、对象、字段和方法必须有说明职责或约束的有效 KDoc，重要实现边界补充行注释。数据库实体和字段的 KDoc 必须详尽：类级注释说明职责与典型使用场景，字段有具体使用场景、取值约定、生命周期或对其他流程的影响时必须逐一写清楚，仅列名自解释且无附加语义的简单字段可不写字段注释。Jimmer 实体列名与属性名蛇形一致时不声明 `@Column`，由 Jimmer 自动解析，该规则由架构测试强制检查。完整规则和示例见《技术架构》7.8 节。
 
 ## 2. 与 pjcloud-common 的取舍
 
@@ -49,8 +53,12 @@ aspen-common-cache    -> aspen-common-core
 | `PageQuery` | 从 1 开始的框架无关分页请求，并安全计算 Long offset |
 | `PageResult<T>` | 框架无关分页结果，不暴露 Spring Data 或 Jimmer 类型 |
 | `Validation` | 不依赖 Bean Validation 的纯值校验函数 |
+| `AspenEnum` | 业务枚举统一契约：`code` 为唯一持久化与契约值，`description` 为默认中文描述，`color` 为可空标签颜色；枚举保持纯净不标注 Jimmer 注解 |
+| `EnumColor` | 标签颜色取值约定：5 个语义色与 11 个调色板色令牌，允许 `#RRGGBB` 逃生口，与 `sys_dict_item.color` 共用 |
+| `AspenEnums` | 按 `code` 反查工具：`codeOf` 未命中返回 null，`requireOf` 未命中抛非法参数异常 |
+| `Gender` / `EnabledStatus` | 性别（语义对齐 ISO/IEC 5218）与通用启停状态枚举 |
 
-业务错误码仍归拥有者 `*-api/{group}/error`。成功 HTTP 响应直接返回 DTO/VO；后续 `aspen-common-web` 将 `BusinessException` 转换为 RFC 9457 Problem Details，并保留正确 HTTP 状态码。core 不提供 `R<T>` 或 `ApiResponse<T>`。
+业务错误码仍归拥有者 `*-api/error/{group}`。成功 HTTP 响应直接返回 DTO/VO；后续 `aspen-common-web` 将 `BusinessException` 转换为 RFC 9457 Problem Details，并保留正确 HTTP 状态码。core 不提供 `R<T>` 或 `ApiResponse<T>`。
 
 错误契约中的机器错误码保持稳定英文，例如 `COMMON.INVALID_ARGUMENT`；默认错误消息和允许返回给调用方的 `BusinessException.detail` 统一使用中文。Java 类型、Cache 名称、数据库结构、下游地址和原始异常消息不得进入对外 `detail`，只允许写入受控日志或保存在异常 `cause` 中。
 
@@ -66,13 +74,20 @@ dependencies {
 
 包根为 `com.zax.aspen.common.database`。Jimmer 是唯一 ORM，公共模块提供：
 
-- `AuditableEntity`：`createdAt`、`updatedAt`，统一使用 `Instant` 和 UTC `Clock`。
-- `VersionedEntity`：Jimmer `@Version` 乐观锁字段。
-- `LogicalDeletedEntity`：Jimmer `@LogicalDeleted` 布尔标记。
+- `CreateAuditEntity`：`created_at`（默认当前时间）与 `created_by` 创建审计。
+- `UpdateAuditEntity`：`updated_at` 与 `updated_by` 更新审计。
+- `DeleteAuditEntity`：`deleted_at` 时间戳逻辑删除与 `deleted_by` 删除人审计。
+- `VersionedEntity`：Jimmer `@Version` 乐观锁字段，初始版本为 `1`。
+- `LogicalDeletedEntity`：Jimmer `@LogicalDeleted` 布尔标记，另一种轻量删除风格。
+- `TenantScopedEntity`：租户标识列映射，继承即声明为租户隔离表。
+- `TenantFilter` / `TenantDraftInterceptor`：为全部租户实体查询自动追加租户条件、保存自动填充租户标识；缺失上下文一律拒绝（fail-closed），服务必须装配 `TenantContextSupplier` 提供。
+- `AuditableEntity`：创建与更新审计的组合。
+- `MutableAuditEntity`：完整审计、时间戳逻辑删除与乐观锁的组合。
 - `AuditDraftInterceptor`：新增时写入创建/更新时间，更新时只改更新时间。
+- `AspenEnumProviders`：把实现 `AspenEnum` 的枚举按 `code` 与数据库小写字符串互转，按 `aspen.database.enums.base-packages`（默认 `com.zax.aspen`）自动扫描注册，未知存储值拒绝转换。
 - `DatabaseLimits`：统一校验分页和批处理上限。
 
-三种映射接口按实体需要组合，不提供固定 ID 的巨型 BaseEntity。ID、表名、业务字段和 Repository 仍属于具体 `biz`。common-database 不提供多租户过滤、动态数据源、跨服务 Entity、BaseRepository、MySQL 驱动或数据库迁移执行器。
+原子映射按实体需要自由组合，命名组合只为高频形态提供捷径，不提供携带业务字段或表名的巨型 BaseEntity；`remark` 等展示性字段和业务性 JSON 数据由具体表按语义命名专用列，公共映射不提供通用 `extension` 兜底列。操作人审计列（`created_by`/`updated_by`/`deleted_by`）统一为字符串主体标识，各服务把用户 ID 或服务身份转为字符串写入，公共映射不假设主体 ID 的具体格式。`tenantId`、表名、业务字段和 Repository 仍属于具体 `biz`。common-database 不提供动态数据源、跨服务 Entity、BaseRepository、MySQL 驱动或数据库迁移执行器；多租户隔离只提供 `TenantScopedEntity` 列映射与 `TenantFilter` 自动过滤，租户上下文的获取与装配仍由各服务负责。
 
 默认配置：
 

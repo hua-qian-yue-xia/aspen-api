@@ -8,15 +8,16 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 /** 验证审计拦截器对新增和更新操作使用不同写入规则 */
 class AuditDraftInterceptorTest {
     /** 为审计断言提供固定时间 */
-    private val now = Instant.parse("2026-09-02T06:30:00Z")
+    private val now: LocalDateTime = LocalDateTime.parse("2026-09-02T06:30:00")
 
     /** 使用固定时钟创建待测审计拦截器 */
-    private val interceptor = AuditDraftInterceptor(Clock.fixed(now, ZoneOffset.UTC))
+    private val interceptor = AuditDraftInterceptor(Clock.fixed(Instant.parse("2026-09-02T06:30:00Z"), ZoneOffset.UTC))
 
     /** 验证新增实体会同时写入创建时间和更新时间 */
     @Test

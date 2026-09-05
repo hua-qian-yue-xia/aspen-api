@@ -1,7 +1,7 @@
 # Aspen 项目技术架构
 
 > 文档状态：目标架构已确认，待按实施阶段落地  
-> 文档基线：2026-09-02  
+> 文档基线：2026-09-06  
 > 扫描范围：`build.gradle.kts`、`settings.gradle.kts`、Gradle Wrapper、`src/main` 与 `src/test`  
 > 部署约束：自有机房、Docker，不使用 Kubernetes，不依赖第三方云厂商  
 > 规模目标：100 万注册用户、50 万日活跃用户  
@@ -205,7 +205,7 @@ aspen/
 │   └── aspen-task-biz/                  # 唯一调度运行时，集群协调和任务投递
 ├── services/
 │   ├── aspen-admin/
-│   │   ├── aspen-admin-api/             # Admin 对外契约，内部按 upm/sys 分组
+│   │   ├── aspen-admin-api/             # Admin 对外契约，契约类型目录内按 upm/sys 分组
 │   │   └── aspen-admin-biz/             # 单一 Admin 运行与部署单元
 │   └── <service-name>/
 │       ├── <service-name>-api/          # 本服务对外契约
@@ -219,7 +219,8 @@ aspen/
     ├── microservice-technical-solution.md
     ├── technical-architecture.md
     ├── common-module-design.md
-    └── admin-upm-data-model.md
+    ├── admin-upm-data-model.md
+    └── admin-sys-data-model.md
 ```
 
 | 模块类型 | Gradle 形态 | 可执行 | 是否注册 Nacos | 是否生成 Docker 镜像 |
@@ -275,29 +276,42 @@ aspen/
 
 ### 7.3 `api` 强制目录规范
 
-`api` 的目录是对外契约分类，不按 Controller、Service、Repository 等实现层组织。标准结构如下：
+`api` 的目录按契约类型组织，不按 Controller、Service、Repository 等实现层组织。存在多个业务组的服务，契约类型目录下再按业务组归档：
 
 ```text
 <service-name>-api/
 ├── build.gradle.kts
 └── src/
     ├── main/kotlin/com/zax/aspen/<service>/api/
-    │   ├── contract/                    # HTTP 契约接口、路径和版本定义
-    │   ├── dto/                         # 新增、修改、查询、分页等入参 DTO
-    │   ├── vo/                          # 详情、列表项、分页结果等出参 VO
-    │   ├── client/                      # 供消费方使用的 OpenFeign Client
+    │   ├── contract/
+    │   │   └── {group}/                # 业务组 HTTP 契约接口、路径和版本定义
+    │   ├── dto/
+    │   │   └── {group}/                # 业务组新增、修改、查询、分页等入参 DTO
+    │   ├── vo/
+    │   │   └── {group}/                # 业务组详情、列表项、分页结果等出参 VO
+    │   ├── client/
+    │   │   └── {group}/                # 业务组供消费方使用的 OpenFeign Client
     │   ├── event/
-    │   │   └── payload/                 # 版本化事件及其业务 Payload
-    │   ├── task/                        # 可选：统一任务服务投递的命令契约
-    │   ├── enums/                       # 对外公开且稳定的枚举
-    │   ├── error/                       # 本服务公开错误码
-    │   ├── validation/                  # 契约级校验注解，不含业务查询
-    │   └── constant/                    # 少量稳定协议常量，禁止业务配置
+    │   │   └── {group}/payload/        # 业务组版本化事件及其业务 Payload
+    │   ├── task/
+    │   │   └── {group}/                # 可选：业务组统一任务服务投递的命令契约
+    │   ├── enums/
+    │   │   └── {group}/                # 业务组对外公开且稳定的枚举
+    │   ├── error/
+    │   │   └── {group}/                # 业务组公开错误码
+    │   ├── validation/
+    │   │   └── {group}/                # 业务组契约级校验注解，不含业务查询
+    │   └── constant/                   # 少量稳定协议常量，禁止业务配置
     └── test/kotlin/com/zax/aspen/<service>/api/
-        ├── contract/                    # HTTP/Feign 契约一致性测试
-        ├── serialization/               # DTO、VO、事件序列化兼容测试
-        └── validation/                  # DTO 入参校验测试
+        ├── contract/
+        │   └── {group}/                # 业务组 HTTP/Feign 契约一致性测试
+        ├── serialization/
+        │   └── {group}/                # 业务组 DTO、VO、事件序列化兼容测试
+        └── validation/
+            └── {group}/                # 业务组 DTO 入参校验测试
 ```
+
+`{group}` 表示服务内的业务组。单一业务边界的服务（如 `aspen-auth-api`、`aspen-task-api`）没有业务组，省略组子目录，契约类型目录直接承载对应类型；复合服务（如 Admin）必须在每个契约类型目录下使用 `upm/sys` 组目录，禁止把业务契约直接放在契约类型根。
 
 各目录的强制语义如下：
 
@@ -441,20 +455,20 @@ RocketMQ Consumer -> Service
 9. 测试包镜像生产包结构，测试夹具放在测试源码集，禁止为测试方便扩大生产类可见性。
 10. 生成代码只来自 Jimmer KSP 等受控生成器，生成目录不提交手工修改，也不在生成代码中放业务逻辑。
 11. 源码注释正文统一使用中文，框架名、类型名和配置键等专有名称保留原文；注释中的逗号、冒号、分号和括号等标点统一使用英文字符，注释句尾不使用句号。
-12. 类、接口、枚举、对象、字段和方法必须使用 KDoc 说明职责、约束或失败语义；重要配置、兼容处理和安全边界使用行注释说明原因。第 14 条定义的简单数据库字段是字段 KDoc 的唯一例外。
+12. 类、接口、枚举、对象、字段和方法必须使用 KDoc 说明职责、约束或失败语义；重要配置、兼容处理和安全边界使用行注释说明原因。
 13. 注释必须解释职责或设计约束，禁止仅把类名、字段名或方法名翻译成中文形成无信息量注释。
-14. Jimmer 数据库字段在 `@Column(name = "...")` 已清楚表达列名时，不重复添加简单字段注释；复杂映射、兼容规则或非直观约束仍必须说明。
-15. 机器错误码、配置键、协议字段名和 Bean 名使用稳定英文；默认错误消息以及允许返回给调用方的 `BusinessException.detail` 必须使用中文。
-16. 对外错误消息不得包含 Java 类型、Cache 名称、数据库结构、下游地址或原始异常消息；内部诊断信息只写入受控日志或保存在异常 `cause` 中。
+14. Jimmer 实体列名与属性名蛇形一致时不声明 `@Column`，由 Jimmer 自动解析；仅列名与约定不一致时才显式声明 `@Column(name = "...")`，该规则由架构测试强制检查。
+15. 数据库实体和字段的 KDoc 必须详尽：类级注释说明职责与典型使用场景；字段有具体使用场景、取值约定、生命周期或对其他流程的影响时必须逐一写清楚，例如「字典编码, 业务代码以其定位字典, 租户内唯一, 创建后不可修改」；仅列名自解释且无附加语义的简单字段可不写字段注释。
+16. 机器错误码、配置键、协议字段名和 Bean 名使用稳定英文；默认错误消息以及允许返回给调用方的 `BusinessException.detail` 必须使用中文。
+17. 对外错误消息不得包含 Java 类型、Cache 名称、数据库结构、下游地址或原始异常消息；内部诊断信息只写入受控日志或保存在异常 `cause` 中。
 
 简单数据库字段采用以下写法：
 
 ```kotlin
-@Column(name = "created_at")
-val createdAt: Instant
+val createdAt: LocalDateTime
 ```
 
-不要添加 `/** 创建时间 */` 这类只重复字段名称的注释。关联映射、计算属性、兼容旧列、脱敏要求和其他无法由注解直接表达的约束仍必须使用中文 KDoc 说明。
+不要添加 `/** 创建时间 */` 这类只重复字段名称的注释，也不要声明与属性名蛇形一致的 `@Column`。有使用场景、取值约定或流程影响的字段必须写清场景，例如 `/** 字典编码, 业务代码以其定位字典, 租户内唯一, 创建后不可修改 */`。关联映射、计算属性、兼容旧列、脱敏要求和其他无法由注解直接表达的约束仍必须使用中文 KDoc 说明。
 
 ### 7.9 模块依赖白名单
 
@@ -487,36 +501,53 @@ Admin 生产环境使用一个 Nacos 服务名 `aspen-admin`，所有实例运�
 
 #### 7.10.1 Admin API 目录
 
-`api` 先按业务组分，再按契约类型分：
+`api` 与 `biz` 一致，先按契约类型分，每个契约类型目录内部再按业务组 `upm/sys` 归档：
 
 ```text
 aspen-admin-api/
 └── src/
     ├── main/kotlin/com/zax/aspen/admin/api/
-    │   ├── upm/
-    │   │   ├── contract/                # 用户、组织、角色、菜单、权限 HTTP 契约
-    │   │   ├── dto/                     # UPM 入参
-    │   │   ├── vo/                      # UPM 出参
-    │   │   ├── client/                  # UPM Feign Client
-    │   │   ├── event/                   # UPM 对外业务事件
-    │   │   ├── task/                    # 可选：UPM 任务命令契约
-    │   │   ├── enums/
-    │   │   └── error/
-    │   └── sys/
-    │       ├── contract/                # 字典、参数、国际化等 HTTP 契约
-    │       ├── dto/                     # Sys 入参
-    │       ├── vo/                      # Sys 出参
-    │       ├── client/                  # Sys Feign Client
-    │       ├── event/                   # Sys 对外业务事件
-    │       ├── task/                    # 可选：Sys 任务命令契约
-    │       ├── enums/
-    │       └── error/
+    │   ├── contract/
+    │   │   ├── upm/                   # 用户、组织、角色、菜单、权限 HTTP 契约
+    │   │   └── sys/                   # 字典、参数、国际化等 HTTP 契约
+    │   ├── dto/
+    │   │   ├── upm/                   # UPM 入参
+    │   │   └── sys/                   # Sys 入参
+    │   ├── vo/
+    │   │   ├── upm/                   # UPM 出参
+    │   │   └── sys/                   # Sys 出参
+    │   ├── client/
+    │   │   ├── upm/                   # UPM Feign Client
+    │   │   └── sys/                   # Sys Feign Client
+    │   ├── event/
+    │   │   ├── upm/payload/           # UPM 对外业务事件
+    │   │   └── sys/payload/           # Sys 对外业务事件
+    │   ├── task/
+    │   │   ├── upm/                   # 可选：UPM 任务命令契约
+    │   │   └── sys/                   # 可选：Sys 任务命令契约
+    │   ├── enums/
+    │   │   ├── upm/
+    │   │   └── sys/
+    │   ├── error/
+    │   │   ├── upm/
+    │   │   └── sys/
+    │   ├── validation/
+    │   │   ├── upm/
+    │   │   └── sys/
+    │   └── constant/                  # Admin 级协议常量，不按业务组拆分
     └── test/kotlin/com/zax/aspen/admin/api/
-        ├── upm/
-        └── sys/
+        ├── contract/
+        │   ├── upm/
+        │   └── sys/
+        ├── serialization/
+        │   ├── upm/
+        │   └── sys/
+        └── validation/
+            ├── upm/
+            └── sys/
 ```
 
-`task` 目录只存放由目标业务组拥有的 `*TaskCommand`，不包含 Quartz、Job 或调度配置；没有任务命令时不创建。`event` 与 `task` 不能互相替代：Event 表示已经发生的事实，Task Command 表示请求业务服务执行动作。
+`task` 目录只存放由目标业务组拥有的 `*TaskCommand`，不包含 Quartz、Job 或调度配置；没有任务命令时不创建。`event` 与 `task` 不能互相替代：Event 表示已经发生的事实，Task Command 表示请求业务服务执行动作。Admin 各契约类型目录内禁止出现未归入 `upm/sys` 业务组的业务契约。
 
 #### 7.10.2 Admin Biz 目录
 
@@ -599,7 +630,7 @@ Auth 与 Admin/UPM 的边界固定为：
 
 - `aspen-auth-biz` 拥有登录协议、认证编排、Token 签发与刷新、客户端认证、服务身份和密钥生命周期。
 - `admin/upm` 拥有用户资料、租户、组织、角色、菜单、权限，以及凭证摘要、外部身份、MFA、会话、密码历史和登录审计的权威持久化数据。
-- Auth 通过 `aspen-admin-api/upm` 访问 UPM 身份与安全状态，不得复制第二份用户、角色、权限、凭证或会话数据表。
+- Auth 通过 `aspen-admin-api` 中 `upm` 业务组的契约访问 UPM 身份与安全状态，不得复制第二份用户、角色、权限、凭证或会话数据表。
 - `upm_user_credential`、`upm_user_session` 等表归 UPM 不表示 Admin 负责 Token 协议或密钥生成；表所有权与认证流程所有权必须分开。
 - 短期缓存可以存在，但不能演变为 Auth 与 UPM 两套权威数据源。
 
@@ -638,8 +669,8 @@ upm_role
 upm_permission
 upm_dept
 upm_menu
-sys_dictionary
-sys_dictionary_item
+sys_dict
+sys_dict_item
 sys_config
 ```
 
@@ -784,9 +815,12 @@ occurredAt
 producer
 aggregateType
 aggregateId
+tenantId
 traceId
 payload
 ```
+
+租户实体产生的事件必须携带 `tenantId`，消费者在无租户上下文的场景按事件信封重建租户后执行幂等处理。
 
 关键事件使用本地事务 + Outbox 或经过验证的 RocketMQ 事务消息。消费者必须假设消息可能重复，使用 `eventId` 或业务幂等键去重；业务事务成功后才能确认消息。失败重试有明确上限，超过上限进入死信队列和人工处置流程，禁止无限重试。
 
@@ -827,13 +861,31 @@ Jimmer 是业务服务唯一 ORM。禁止引入：
 - 使用 Fetcher/Projection 明确查询形状，限制分页、批次和关联深度，避免 N+1 和无边界加载。
 - 事务边界位于 `biz/service` 的公开业务方法，只覆盖本服务数据库。
 
-`aspen-common-database` 只提供可选择组合的 `AuditableEntity`、`VersionedEntity` 和 `LogicalDeletedEntity`，不提供携带固定 ID 策略的巨型 BaseEntity。首版不包含 `tenantId`、租户 ThreadLocal 或自动租户过滤；租户数据虽然由 `admin/upm` 管理，但隔离模型必须在数据所有权、公共表、跨租户管理和异步上下文规则确定后单独设计。
+`aspen-common-database` 提供原子映射与命名组合：原子映射包括 `CreateAuditEntity`、`UpdateAuditEntity`、`DeleteAuditEntity`、`VersionedEntity`（乐观锁初始版本 1）、`LogicalDeletedEntity` 和 `TenantScopedEntity`（租户标识列映射）；命名组合包括 `AuditableEntity`（创建与更新审计）和 `MutableAuditEntity`（完整审计、时间戳逻辑删除与乐观锁）。主键由各实体自行声明并采用语义化列名（表名去业务组前缀加 `_id`，如 `upm_user.user_id`），公共映射不固定 ID 策略。实体按需自由组合原子映射，不提供携带业务字段或表名的巨型 BaseEntity，`remark` 等展示性字段和业务性 JSON 数据由具体表按语义命名专用列，不提供通用 `extension` 兜底列。业务包不创建无字段的纯组合接口，实体直接组合 common 的原子映射与命名组合，保证阅读单个实体声明即可看到完整继承来源。
 
-Admin UPM 的字段和表设计见《[Admin UPM 数据模型](./admin-upm-data-model.md)》。UPM 在 Biz 内定义租户标识、数据库自增 ID 和 `deleted_at` 时间戳逻辑删除映射，不把这些业务语义反向加入 common-database。
+租户隔离由 common-database 的设施承载：`TenantScopedEntity` 声明 `tenant_id` 列，继承它的实体即声明为租户隔离表，不继承即为公共表；`TenantFilter` 通过 Jimmer 的 MappedSuperclass 过滤器为全部租户实体的查询自动追加当前租户条件；`TenantDraftInterceptor` 在新增数据时自动填充服务端上下文中的租户标识并禁止客户端自选租户。租户上下文通过 `TenantContextSupplier` SPI 注入，common-database 不依赖安全组件，由各服务从自身安全或请求上下文装配。缺失租户上下文时查询和保存一律拒绝（fail-closed），禁止 fail-open 造成跨租户数据泄漏；跨租户管理操作必须使用显式的系统上下文并保留审计，不允许随意豁免过滤器。租户标识经 Gateway/Auth 校验后随内部 Header、OpenFeign 请求与 RocketMQ 事件信封传播，任务命令同样必须携带租户上下文。
+
+Admin UPM 的字段和表设计见《[Admin UPM 数据模型](./admin-upm-data-model.md)》。UPM 与 SYS 复用 common 的自增主键与可更新审计映射，只在各自 entity 包内定义租户标识基类，不把租户语义反向加入 common-database。
 
 ### 12.3 数据库变更
 
 数据库结构使用版本化脚本管理。每次变更必须有唯一版本、变更说明、前向脚本和必要的修复方案；生产环境禁止依赖 Jimmer 自动建表或自动修改 Schema。兼容发布采用“扩展、迁移、切换、清理”的顺序，确保新旧 `biz` 容器滚动期间均可工作。
+
+### 12.4 枚举规范
+
+所有业务枚举实现 `aspen-common-core` 的 `AspenEnum` 契约, 以 `code` 小写字符串作为唯一持久化与契约值, 并携带 `description` 默认中文描述与可空的 `color` 标签颜色:
+
+- 枚举定义保持纯净, 不标注任何 Jimmer 注解, 因此可以被 `api` 契约直接引用; 持久化映射由 common-database 的 `AspenEnumProviders` 桥接, 只使用 `code` 与数据库小写字符串互转, 未知存储值拒绝转换; `description` 与 `color` 不参与持久化。业务服务通过 `aspen.database.enums.base-packages`（默认 `com.zax.aspen`）声明扫描范围, 转换器自动注册进 Jimmer。
+- 按 `code` 反查统一使用 `AspenEnums.codeOf`（未命中返回 null）与 `AspenEnums.requireOf`（未命中抛出携带枚举名的非法参数异常）, 禁止各枚举重复编写 companion 反查方法。
+- `description` 是随代码发布的默认展示描述, 必须为非空中文, 直接用于界面、日志与错误消息; 需要运营定制文案时由 `sys_dict` 覆盖展示, 字典只能覆盖描述, 不能改变 code 语义。同一个值域只能以枚举或字典之一作为权威来源, 禁止两边同时配置。
+- `color` 取值为 `EnumColor` 调色板令牌（5 个语义色 `default/primary/success/warning/danger` 与 11 个调色板色 `red/volcano/orange/gold/lime/green/cyan/blue/geekblue/purple/magenta`）或 `#RRGGBB` 十六进制色值, 与 `sys_dict_item.color` 共用同一套约定; 前端按令牌映射到自身组件库样式, 后端不描述具体视觉实现; 无着色需求时为 null。
+- 分包归属: 跨服务通用枚举（`AspenEnum`、`EnumColor`、`AspenEnums`、`Gender`、`EnabledStatus`）位于 common-core 的 `enums` 包; 对外契约的域枚举位于提供方 `api/enums/{group}`; 纯内部状态机的域枚举位于 `biz` 对应业务组。
+- 枚举与字典的边界: 代码逻辑依赖的稳定取值（分支判断、状态机、跨服务契约）使用 Kotlin 枚举, 编译期安全; 运营可配置的取值集合（下拉选项、可增删的分类）使用 `sys_dict`。逻辑值禁止进字典。
+- 按域定义精确枚举: `enabled/disabled` 语义真正同构的字段共享 `EnabledStatus`; 域内有额外生命周期时（如用户锁定、会话撤销）必须定义域枚举, 禁止向通用枚举追加值形成上帝枚举。
+- `code` 一经发布即稳定契约: 禁止修改既有值或删除枚举项, 只能新增; 同一枚举内 code 唯一且为小写下划线格式, `description` 非空中文, `color` 合法, 均由 common-core 测试强制检查。
+- 性别使用 `Gender`, 取值语义对齐 ISO/IEC 5218（unknown/male/female/not_applicable 对应 0/1/2/9）, 存储保持小写字符串与全库风格统一, 性别展示不着色。
+- 是/否语义使用 Kotlin `Boolean`, 不定义 YesNo 类枚举。
+- 实体状态字段从 String 切换为枚举时, 数据库列值必须与 code 完全一致, 切换前后数据零迁移。
 
 ## 13. Nacos 单节点与配置架构
 
@@ -970,6 +1022,7 @@ Quartz Cluster 只能协调“哪个调度实例获得 Trigger”，不能承诺
 - 业务服务端口只能开放在受控内网，外部流量必须经过 Gateway；但网络隔离不能替代身份校验。
 - 服务间系统行为使用独立短期服务身份，不能长期冒用用户令牌。
 - `401` 表示未认证，`403` 表示无权限，不能包装为业务成功响应。
+- 租户上下文由 Gateway/Auth 校验令牌后确定并随内部 Header 透传，业务进程通过 `TenantContextSupplier` 从安全上下文装配给 common-database；租户查询与保存 fail-closed，缺失上下文即拒绝，跨租户操作必须使用显式系统上下文并保留审计。
 - Gateway/Auth 记录认证失败、路由授权失败、密钥变更和高风险管理操作；业务 Service 记录资源级越权拒绝。
 
 如果完全移除业务进程的身份校验，任何能够访问业务容器端口的内部主机或被攻陷服务都可以绕过 Gateway 并伪造用户 Header。为此，本架构移除的是业务服务私有安全实现和目录，而不是业务进程的最小信任边界。
@@ -1112,7 +1165,7 @@ Quartz Cluster 只能协调“哪个调度实例获得 Trigger”，不能承诺
 2. **建立最小公共基线**：创建 `common-core`、`common-database` 和 `common-cache`；业务服务仍按首个真实使用场景选择依赖，不能模板式引入全部基础设施。
 3. **验证 Jimmer**：在首个 `biz` 中完成 KSP、实体、Fetcher/DTO、查询、写入和事务测试，确认 Kotlin/Boot/Jimmer 组合。
 4. **拆分第一个服务**：先定义 `<service>-api` 契约，再将 Controller 和全部实现放入 `<service>-biz`，以此作为后续服务模板。
-5. **落地 Admin 复合服务**：创建 `aspen-admin-api/biz`，在 `api` 中先按 `upm/sys` 分组、组内再按契约类型组织，在 `biz` 中先按 MVC 层组织、层内再按 `upm/sys` 业务组归档；验证只有一个 `aspen-admin` Nacos 服务和一个 Admin Biz 镜像，并让包依赖、表所有权和构建产物规则通过自动化测试。
+5. **落地 Admin 复合服务**：创建 `aspen-admin-api/biz`，在 `api` 中先按契约类型组织、类型内再按 `upm/sys` 业务组归档，在 `biz` 中先按 MVC 层组织、层内再按 `upm/sys` 业务组归档；验证只有一个 `aspen-admin` Nacos 服务和一个 Admin Biz 镜像，并让包依赖、表所有权和构建产物规则通过自动化测试。
 6. **拆分认证服务**：建立 `aspen-auth-api` 与 `aspen-auth-biz`，落地统一身份、权限和服务凭证。
 7. **建立 Gateway**：创建 `aspen-gateway`，接入 Nacos 动态路由、Spring Security 和 Sentinel。
 8. **建立同步调用**：由提供方 `api` 发布 Feign Client，消费方 `biz` 接入超时、错误解码和熔断。
@@ -1170,7 +1223,7 @@ Quartz Cluster 只能协调“哪个调度实例获得 Trigger”，不能承诺
 1. Gradle 能分别构建 `service-api` 普通 JAR 和 `service-biz` 可执行 JAR。
 2. `service-api` 无启动类、无 Jimmer Entity、无数据源配置、无 Docker 镜像。
 3. `service-biz` 实现 `service-api` HTTP 契约，内部调用严格遵循 Controller、Service、Repository 三层并通过契约测试。
-4. Admin 的 `api` 先按 `upm/sys` 分组、组内遵循契约目录；`biz` 先按 MVC 层组织、层内按 `upm/sys` 业务组归档。跨组只有 `service -> service`，Repository、Entity、Fetcher、Projection 和表访问没有越界。
+4. Admin 的 `api` 先按契约类型组织、类型内按 `upm/sys` 业务组归档；`biz` 先按 MVC 层组织、层内按 `upm/sys` 业务组归档。跨组只有 `service -> service`，Repository、Entity、Fetcher、Projection 和表访问没有越界。
 5. Admin 只生成一个 `aspen-admin-biz` 镜像并注册一个 `aspen-admin` Nacos 服务，`upm/sys` 不产生独立运行或部署单元。
 6. 另一服务只能通过 `service-api` 的 Feign Client 调用该 `biz`。
 7. 事件结构位于生产方 `api`，生产和消费实现位于各自 `biz`。

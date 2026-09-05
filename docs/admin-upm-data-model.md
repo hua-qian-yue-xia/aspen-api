@@ -1,5 +1,9 @@
 # Admin UPM 数据模型
 
+> 文档状态：首版 24 张表 Entity 与版本化 Schema 已实现，Controller/Service 待建  
+> 文档基线：2026-09-06  
+> 关联文档：[技术架构](./technical-architecture.md)｜[Common 模块设计](./common-module-design.md)
+
 ## 1. 目标与来源
 
 Admin UPM 使用 Jimmer 建模，并以 `aspen-node/modules/upm/src/infrastructure/database/schema` 的字段、约束和索引为兼容基线。当前实现覆盖 24 张表，代码位于：
@@ -43,12 +47,12 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/upm/
 ## 3. Jimmer 映射约定
 
 - 实体以 `Entity` 结尾，每个 Jimmer Entity 或 MappedSuperclass 单独放在一个 Kotlin 文件中。
-- 主键映射为数据库 `BIGINT UNSIGNED AUTO_INCREMENT`，JVM 使用 `Long`；写入值必须限制在 JVM 有符号 `Long` 范围内。
+- 主键映射为数据库 `BIGINT UNSIGNED AUTO_INCREMENT`，JVM 使用 `Long`。主键列使用表名去掉 `upm_` 前缀加 `_id` 的语义化命名（如 `upm_user.user_id`），由各 Entity 自行声明，公共映射不固定 ID 策略；引用列与被引用主键同名，join 语义自解释。将来增加对象关联时必须显式声明被引用主键列，不依赖默认 `id` 约定；写入值必须限制在 JVM 有符号 `Long` 范围内。
 - 除 `upm_tenant` 外的业务表包含 `tenant_id`；租户条件必须由未来 Repository 的每条业务查询显式约束。
 - 首版外键在 Jimmer 中映射为标量 ID，数据库迁移仍保留完整外键。等真实查询形状确定后再按需增加关联，避免默认加载对象图。
-- `DATETIME(3)` 映射为 `Instant`，应用和 JDBC 会话统一按 UTC 处理，租户 `timezone` 只用于展示与业务时间解释。
-- 可更新实体复用 `AuditableEntity`，并在 UPM 本地定义初始值为 `1` 的 Jimmer 乐观锁字段，同时增加 `remark`、JSON `extension`、操作人以及 `deleted_at` 时间戳逻辑删除。公共 `VersionedEntity` 的默认版本为 `0`，不能直接表达来源模型的初始值。
-- SQL 中的业务默认值通过 Jimmer `@Default` 同步，创建时间和发生时间使用 `@Default("now")` 生成 UTC `Instant`；SQL 同时保留 `CURRENT_TIMESTAMP(3)`，保证非 Jimmer 写入也有数据库默认时间。Jimmer `0.11.7` 的 Kotlin 元数据在校验 `@DatabaseDefault` 时存在数组类型转换缺陷，本版不使用该注解。
+- `DATETIME(3)` 映射为 `LocalDateTime`，部署域全部 Docker 主机与应用进程统一使用 `Asia/Shanghai` 时区并接入统一 NTP，时间按服务器时区直接存取；租户 `timezone` 只用于跨时区展示转换。
+- 实体直接组合 common 的 `MutableAuditEntity`（可更新表：完整审计、初始值为 `1` 的乐观锁、`deleted_at` 时间戳逻辑删除）或 `CreateAuditEntity`（不可变关系表：`created_at` 与 `created_by`）与 `TenantScopedEntity`（租户列），不创建业务包级纯组合接口。主键由各实体自行声明，公共映射不固定 ID 策略。租户条件由 common 的 `TenantFilter` 自动追加，业务查询不手写 `tenant_id`。
+- SQL 中的业务默认值通过 Jimmer `@Default` 同步，创建时间和发生时间使用 `@Default("now")` 生成部署域统一时区的 `LocalDateTime`；SQL 同时保留 `CURRENT_TIMESTAMP(3)`，保证非 Jimmer 写入也有数据库默认时间。Jimmer `0.11.7` 的 Kotlin 元数据在校验 `@DatabaseDefault` 时存在数组类型转换缺陷，本版不使用该注解。
 - 关系和历史表只保留 `created_at`、`created_by`；登录日志和授权变更日志不支持更新或逻辑删除。
 - 状态、来源、授权效果等字段首版使用 `String`，以保持数据库中的小写值不被 JVM 枚举名称改写。引入枚举时必须显式定义并测试持久化值转换。
 

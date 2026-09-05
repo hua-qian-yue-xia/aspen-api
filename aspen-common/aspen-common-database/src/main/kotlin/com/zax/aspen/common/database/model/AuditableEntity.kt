@@ -1,15 +1,7 @@
 package com.zax.aspen.common.database.model
 
-import org.babyfish.jimmer.sql.Column
 import org.babyfish.jimmer.sql.MappedSuperclass
-import java.time.Instant
 
-/** 为服务自有的 Jimmer 实体提供可选审计时间字段 */
+/** 组合创建与更新审计, 覆盖业务表的时间与操作人追溯 */
 @MappedSuperclass
-interface AuditableEntity {
-    @Column(name = "created_at")
-    val createdAt: Instant
-
-    @Column(name = "updated_at")
-    val updatedAt: Instant
-}
+interface AuditableEntity : CreateAuditEntity, UpdateAuditEntity

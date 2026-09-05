@@ -29,3 +29,4 @@ Aspen 是一套微服务基础设施项目，提供公共基础模块（core / d
 3. [技术架构](./docs/technical-architecture.md)
 4. [Common 模块设计](./docs/common-module-design.md)
 5. [Admin UPM 数据模型](./docs/admin-upm-data-model.md)
+6. [Admin SYS 数据模型](./docs/admin-sys-data-model.md)

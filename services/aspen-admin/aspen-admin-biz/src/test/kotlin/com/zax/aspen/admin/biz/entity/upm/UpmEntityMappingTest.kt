@@ -8,6 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -25,17 +26,15 @@ class UpmEntityMappingTest {
         }
     }
 
-    /** 验证用户展示字段保持 nickname 和 real_name 设计 */
+    /** 验证列名与属性名蛇形一致时不声明 Column 注解, 由 Jimmer 自动解析 */
     @Test
-    fun `keeps user naming compatible with the source schema`() {
-        val userType = ImmutableType.get(UpmUserEntity::class.java)
-
-        assertTrue("username" in userType.props)
-        assertTrue("nickname" in userType.props)
-        assertTrue("realName" in userType.props)
-        assertFalse("displayName" in userType.props)
-        assertEquals("real_name", columnName(userType, "realName"))
-        assertEquals("primary_dept_id", columnName(userType, "primaryDeptId"))
+    fun `resolves column names without explicit annotations`() {
+        entityClasses.forEach { entityClass ->
+            val type = ImmutableType.get(entityClass)
+            type.props.values.forEach { prop ->
+                assertNull(prop.getAnnotation(Column::class.java), "${entityClass.simpleName}.${prop.name} 的列名与属性蛇形一致, 不应声明 @Column")
+            }
+        }
     }
 
     /** 验证可更新实体使用乐观锁和 deleted_at 时间戳逻辑删除 */
@@ -47,10 +46,9 @@ class UpmEntityMappingTest {
 
         assertTrue(versionProp.isVersion)
         assertSame(versionProp, userType.versionProp)
-        assertEquals(1, versionProp.defaultValueRef.value)
+        assertEquals("1", assertNotNull(versionProp.getAnnotation(org.babyfish.jimmer.sql.Default::class.java)).value)
         assertTrue(deletedAtProp.isLogicalDeleted)
         assertSame(deletedAtProp, assertNotNull(userType.logicalDeletedInfo).prop)
-        assertEquals("deleted_at", columnName(userType, "deletedAt"))
     }
 
     /** 验证来源模型的用户业务默认值已声明到 Jimmer 元数据 */
@@ -64,23 +62,36 @@ class UpmEntityMappingTest {
         assertEquals(false, userType.getProp("mustChangePassword").defaultValueRef.value)
     }
 
-    /** 验证 JSON 字段、关系标识和审计快照的代表性列名 */
+    /** 验证用户展示字段保持 nickname 和 real_name 设计 */
+    @Test
+    fun `keeps user naming compatible with the source schema`() {
+        val userType = ImmutableType.get(UpmUserEntity::class.java)
+
+        assertTrue("username" in userType.props)
+        assertTrue("nickname" in userType.props)
+        assertTrue("realName" in userType.props)
+        assertFalse("displayName" in userType.props)
+        assertEquals("real_name", "realName".toSnakeCase())
+        assertEquals("primary_dept_id", "primaryDeptId".toSnakeCase())
+    }
+
+    /** 验证 JSON 字段、关系标识和审计快照的代表性属性与迁移列对应 */
     @Test
     fun `maps representative source columns`() {
         val menuType = ImmutableType.get(UpmMenuEntity::class.java)
         val creationType = ImmutableType.get(UpmPasswordHistoryEntity::class.java)
 
-        assertEquals("query_parameters", columnName(menuType, "queryParameters"))
+        assertEquals("query_parameters", "queryParameters".toSnakeCase())
         assertEquals("admin", menuType.getProp("platform").defaultValueRef.value)
         assertTrue(creationType.getProp("createdAt").defaultValueRef.value is Supplier<*>)
-        assertEquals("scope_dept_id", columnName(ImmutableType.get(UpmUserRoleEntity::class.java), "scopeDeptId"))
+        assertEquals("scope_dept_id", "scopeDeptId".toSnakeCase())
         assertEquals(
             "before_snapshot",
-            columnName(ImmutableType.get(UpmAuthorizationChangeLogEntity::class.java), "beforeSnapshot"),
+            "beforeSnapshot".toSnakeCase(),
         )
     }
 
-    /** 验证每个 Jimmer 实体字段与迁移表字段一一对应 */
+    /** 验证每个 Jimmer 实体属性蛇形后的列与迁移表字段一一对应 */
     @Test
     fun `keeps entity columns aligned with the migration`() {
         entityClasses.forEach { entityClass ->
@@ -98,16 +109,15 @@ class UpmEntityMappingTest {
                 .map { it.groupValues[1] }
                 .toSet()
             val entityColumns = type.props.values
-                .map { prop -> assertNotNull(prop.getAnnotation(Column::class.java), "${prop.name} 缺少 @Column").name }
+                .map { prop -> prop.name.toSnakeCase() }
                 .toSet()
 
             assertEquals(migrationColumns, entityColumns, "$tableName 的 Entity 与迁移字段不一致")
         }
     }
 
-    /** 读取属性显式声明的数据库列名 */
-    private fun columnName(type: ImmutableType, propName: String): String =
-        assertNotNull(type.getProp(propName).getAnnotation(Column::class.java)).name
+    /** 把属性名按 Jimmer 默认策略转为蛇形列名 */
+    private fun String.toSnakeCase(): String = replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").lowercase()
 
     /** 从测试类路径读取版本化 UPM 迁移脚本 */
     private val migrationSql: String by lazy {

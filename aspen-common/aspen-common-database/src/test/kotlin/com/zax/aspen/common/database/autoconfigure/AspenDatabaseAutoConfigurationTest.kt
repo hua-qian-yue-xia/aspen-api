@@ -2,6 +2,7 @@ package com.zax.aspen.common.database.autoconfigure
 
 import com.zax.aspen.common.database.audit.AuditDraftInterceptor
 import com.zax.aspen.common.database.policy.DatabaseLimits
+import com.zax.aspen.common.database.tenant.TenantContextSupplier
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
@@ -75,6 +76,31 @@ class AspenDatabaseAutoConfigurationTest {
             }
     }
 
+    /** 验证租户设施只在服务装配租户上下文提供者时注册 */
+    @Test
+    fun `registers tenant beans only when supplier exists`() {
+        contextRunner.run { context ->
+            assertFalse(context.containsBean("aspenTenantFilter"))
+            assertFalse(context.containsBean("aspenTenantDraftInterceptor"))
+        }
+        contextRunner
+            .withUserConfiguration(TenantSupplierConfiguration::class.java)
+            .run { context ->
+                assertTrue(context.containsBean("aspenTenantFilter"))
+                assertTrue(context.containsBean("aspenTenantDraftInterceptor"))
+            }
+    }
+
+    /** 验证类路径扫描为 AspenEnum 枚举注册标量转换器 */
+    @Test
+    fun `registers scalar providers for scanned aspen enums`() {
+        contextRunner.run { context ->
+            val providers = context.getBean("aspenEnumScalarProviders") as List<*>
+
+            assertTrue(providers.size >= 2, "应扫描到 Gender 与 EnabledStatus 两个公共枚举")
+        }
+    }
+
     /** 提供覆盖自动配置默认时钟的用户配置 */
     @Configuration(proxyBeanMethods = false)
     class CustomClockConfiguration {
@@ -87,6 +113,14 @@ class AspenDatabaseAutoConfigurationTest {
             /** 表示用户显式声明的 UTC 固定时钟 */
             val CLOCK: Clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC)
         }
+    }
+
+    /** 提供租户上下文提供者的用户配置 */
+    @Configuration(proxyBeanMethods = false)
+    class TenantSupplierConfiguration {
+        /** 注册返回固定租户的上下文提供者 */
+        @Bean
+        fun tenantContextSupplier(): TenantContextSupplier = TenantContextSupplier { 1L }
     }
 
     /** 提供覆盖默认数据库限制和审计拦截器的用户配置 */

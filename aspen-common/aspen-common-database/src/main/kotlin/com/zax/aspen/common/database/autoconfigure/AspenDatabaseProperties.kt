@@ -14,6 +14,9 @@ class AspenDatabaseProperties {
     /** 批处理限制配置 */
     val batch: Batch = Batch()
 
+    /** 枚举映射配置 */
+    val enums: Enums = Enums()
+
     /** 控制公共审计拦截器 */
     class Audit {
         /** 是否启用公共审计时间写入 */
@@ -36,5 +39,11 @@ class AspenDatabaseProperties {
 
         /** 允许的最大批处理数量 */
         var maxSize: Int = 1_000
+    }
+
+    /** 定义 AspenEnum 枚举扫描范围 */
+    class Enums {
+        /** 扫描实现 AspenEnum 的枚举所在包, 扫描结果注册为 Jimmer 标量转换器 */
+        var basePackages: List<String> = listOf("com.zax.aspen")
     }
 }
