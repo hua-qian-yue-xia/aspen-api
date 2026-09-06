@@ -1,74 +1,119 @@
 # Aspen 开发环境 Nacos 配置中心
-# 服务拓扑: MySQL(共享开发实例) <- Nacos 单节点(外部 MySQL Schema 持久化) <- 一次性配置种子
+# 服务拓扑: MySQL(共享开发实例) + Redis(开发缓存) <- Nacos 单节点(外部 MySQL Schema 持久化); 配置种子不进 compose, 手动执行 nacos/seed.sh
+# 端口方案(容器内外一致, 宿主机与容器网络同端口): MySQL=6100 / Redis=6200 / Nacos 主 API=6300(gRPC 自动=主端口+1000=7300); Nacos 控制台保持默认 8080
 # 启动顺序由健康状态驱动, 不使用固定 sleep; 密钥与账号全部来自同目录 .env (不入库)
-# 版本基线: nacos/nacos-server v3.1.1 对齐 SCA 管理的 Nacos Client 3.1.1, digest 待首次集成测试后锁定
+# 版本基线: nacos/nacos-server v3.1.1 对齐 SCA 管理的 Nacos Client 3.1.1; 镜像 digest 已于 2026-09-06 首次运行验证后锁定
+#
+# 常用操作(在 deploy/ 目录执行):
+#   启动/更新:            docker compose up -d
+#   看 Nacos 日志:        docker logs -f aspen-dev-nacos
+#   手动灌配置种子(Nacos 健康后执行, 幂等只补缺失):
+#     set -a; . ./.env; set +a
+#     docker run --rm --network aspen-dev_default \
+#       -e NACOS_SERVER_ADDR=aspen-dev-nacos:6300 -e NACOS_USER=nacos \
+#       -e NACOS_PASSWORD="${NACOS_ADMIN_PASSWORD}" -e FORCE_SEED=0 \
+#       -v "$(pwd)/nacos:/seed:ro" \
+#       curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69 sh /seed/seed.sh
+#     FORCE_SEED=1 时以 Git 种子强制覆盖; 细则见 seed.sh 头注
+#   彻底重置(含数据卷):    docker compose down -v   # 会删 MySQL/Redis 数据与已灌配置
 
 name: aspen-dev
 
 services:
+
+  # --- MySQL: Nacos 配置持久化库 -------------------------------------------
+  # 8.4 LTS 单实例。首次建卷时由 init/ 下官方 Schema 建表, 之后数据全在
+  # aspen-mysql-data 卷里, 重建容器不丢数据; 同时对宿主机开放 3306 兼作本地直连入口。
   mysql:
     image: mysql:8.4
     container_name: aspen-dev-mysql
-    restart: unless-stopped
+    restart: unless-stopped            # 崩溃/宿主机重启自动拉起, 手动 stop 不拉起
     environment:
-      TZ: Asia/Shanghai
+      TZ: Asia/Shanghai                # 容器时区, 保证日志时间与宿主机一致
+      # root 密码仅用于健康检查与临时排障; Nacos 常规访问走下方 nacos 专用账号
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 deploy/.env 配置 MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: nacos_config
+      # 库名在数据卷首次初始化时自动创建并授权给 nacos 账号; 三处必须同名:
+      # 此处 MYSQL_DATABASE / 下方 MYSQL_SERVICE_DB_NAME / init/01-nacos-schema.sql 的 USE。
+      # 对不上时注意: 已初始化的卷不会重跑 initdb.d, 须 down -v 重置或手工建库授权
+      MYSQL_DATABASE: aspen_nacos_config
       MYSQL_USER: nacos
+      # Nacos 的连接凭据, 与下方 nacos 服务共用 NACOS_MYSQL_PASSWORD, 改 .env 一处即可
       MYSQL_PASSWORD: ${NACOS_MYSQL_PASSWORD:?请在 deploy/.env 配置 NACOS_MYSQL_PASSWORD}
+      # 容器内 mysqld 监听端口改为 6100(官方镜像专用变量), 与宿主机映射端口保持一致
+      MYSQL_TCP_PORT: "6100"
     ports:
-      - "3306:3306"
+      - "6100:6100"                    # 宿主机:容器, 本地客户端经 127.0.0.1:6100 直连
     volumes:
       - aspen-mysql-data:/var/lib/mysql
-      # Nacos 官方 3.1.1 Schema, 仅在数据卷首次初始化时执行
+      # Nacos 官方 3.1.1 Schema, 仅在数据卷首次初始化时执行; 已初始化的卷不会重复跑
       - ./nacos/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "--password=$${MYSQL_ROOT_PASSWORD}"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-    mem_limit: 1g
+      # $$ 为 compose 转义, 密码留到容器内展开, 避免 compose 解析时报未知变量;
+      # nacos 服务 depends_on 此状态, mysqladmin ping 通过才允许 Nacos 启动
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--port=6100", "-u", "root", "--password=$${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s                     # 探测间隔
+      timeout: 3s                      # 单次探测超时
+      retries: 30                      # 最长约 150s, 覆盖冷启动建卷/初始化窗口
+    mem_limit: 1g                      # 开发环境资源上限, 防止本地失控
     cpus: 1.0
-    logging:
+    logging:                           # 日志限额轮转, 防止撑爆磁盘
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
 
+  # --- Nacos Server: 单节点 + 外部 MySQL -----------------------------------
+  # 3.x 端口拓扑(与 2.x 不同): 主 HTTP API(默认 8848, 此处改为 6300) / 客户端 gRPC(自动=主端口
+  # +1000, 即 7300) / 独立控制台(默认 8080, 不复用主端口页面, 保持默认不入 6x00 段)
   nacos:
     image: nacos/nacos-server:v3.1.1
     container_name: aspen-dev-nacos
     restart: unless-stopped
     depends_on:
       mysql:
-        condition: service_healthy
+        condition: service_healthy     # 等 MySQL 真正可连, 避免 Nacos 抢跑报连接拒绝
     environment:
       TZ: Asia/Shanghai
-      MODE: standalone
-      SPRING_DATASOURCE_PLATFORM: mysql
-      MYSQL_SERVICE_HOST: mysql
-      MYSQL_SERVICE_PORT: "3306"
-      MYSQL_SERVICE_DB_NAME: nacos_config
+      MODE: standalone                 # 单机模式, 无集群寻址
+      # 主 API 端口改为 6300(镜像模板变量), 容器内外一致; gRPC 随之自动派生为 6300+1000=7300
+      NACOS_APPLICATION_PORT: "6300"
+      SPRING_DATASOURCE_PLATFORM: mysql  # 声明外部存储为 MySQL, 缺省会落回内嵌 Derby
+      MYSQL_SERVICE_HOST: mysql        # compose 服务名即容器网络内 DNS 名
+      MYSQL_SERVICE_PORT: "6100"       # 跟随 MySQL 容器内监听端口
+      MYSQL_SERVICE_DB_NAME: aspen_nacos_config  # 须与 mysql 服务的 MYSQL_DATABASE 一致
       MYSQL_SERVICE_USER: nacos
-      MYSQL_SERVICE_PASSWORD: ${NACOS_MYSQL_PASSWORD}
+      MYSQL_SERVICE_PASSWORD: ${NACOS_MYSQL_PASSWORD}  # 与 MySQL 初始化同源, .env 单点维护
+      # MySQL 8 caching_sha2_password 认证下, 非 SSL 连接必须允许公钥检索, 否则 Nacos 连不上库:
+      # useSSL=false 时首认需取回服务端 RSA 公钥, 而 Connector/J 默认 allowPublicKeyRetrieval=false,
+      # 缺省参数会报 "Public Key Retrieval is not allowed" 且启动即崩(2026-09-06 已踩坑)
+      MYSQL_SERVICE_DB_PARAM: "useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&connectTimeout=3000&socketTimeout=10000"
+      # --- 服务端鉴权: 开启控制台/API 登录, 以下三件套缺一不可 ---
       NACOS_AUTH_ENABLE: "true"
-      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:?请在 deploy/.env 配置 NACOS_AUTH_TOKEN}
-      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:?请在 deploy/.env 配置 NACOS_AUTH_IDENTITY_KEY}
-      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:?请在 deploy/.env 配置 NACOS_AUTH_IDENTITY_VALUE}
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:?请在 deploy/.env 配置 NACOS_AUTH_TOKEN}                         # JWT 签名密钥, Base64 且原文 >= 32 字符
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:?请在 deploy/.env 配置 NACOS_AUTH_IDENTITY_KEY}       # 服务端间可信请求的身份头名
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:?请在 deploy/.env 配置 NACOS_AUTH_IDENTITY_VALUE} # 与上者配对的取值
     ports:
-      # 8848 主 API + 9848 客户端 gRPC 对宿主机开放; 3.x 控制台独立端口 8080
-      - "8848:8848"
-      - "9848:9848"
+      # 注意: ports 仅控制宿主机↔容器转发(HOST:CONTAINER), 不改变进程监听端口;
+      # 容器内真实监听由上方 NACOS_APPLICATION_PORT 决定, 此处 1:1 同端口发布
+      # 主 HTTP API: OpenAPI 与控制台后端入口(登录鉴权/配置发布查询/健康检查 readiness),
+      # 客户端 server-addr 指向的也是它
+      - "6300:6300"
+      # 客户端 gRPC 长连接: 引擎内置规则=主端口+1000(此处 6300+1000, 改主端口自动跟随);
+      # 配置变更推送、服务发现的心跳与订阅都走此通道而非 HTTP, IDE 本地直连的服务同样需要它
+      - "7300:7300"
+      # 3.x 独立控制台 UI: 浏览器管理界面 http://localhost:8080, 与主 API 共用 nacos 账号;
+      # 端口由 NACOS_CONSOLE_PORT 独立控制(默认 8080), 不随主端口派生
       - "8080:8080"
     volumes:
-      - aspen-nacos-logs:/home/nacos/logs
+      - aspen-nacos-logs:/home/nacos/logs  # 日志独立成卷, 重建容器后仍可取崩溃历史日志
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8848/nacos/v3/admin/core/state/readiness || exit 1"]
+      # v3 admin readiness 端点: 全部内部模块就绪才返回 200, seeder 依赖此状态
+      test: ["CMD-SHELL", "curl -sf http://localhost:6300/nacos/v3/admin/core/state/readiness || exit 1"]
       interval: 5s
       timeout: 3s
-      retries: 60
-      start_period: 30s
-    mem_limit: 2g
+      retries: 60                      # 最长约 5 分钟, 覆盖首次建库连接池等慢启动
+      start_period: 30s                # 启动宽限期, 期间失败不计入 retries
+    mem_limit: 2g                      # Nacos 含内嵌控制台, 给足余量避免启动期 OOM
     cpus: 1.5
     logging:
       driver: json-file
@@ -76,22 +121,33 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  nacos-config-seeder:
-    image: curlimages/curl:8.11.1
-    container_name: aspen-dev-nacos-seeder
-    restart: "no"
-    depends_on:
-      nacos:
-        condition: service_healthy
-    environment:
-      NACOS_SERVER_ADDR: nacos:8848
-      NACOS_USER: nacos
-      NACOS_PASSWORD: ${NACOS_ADMIN_PASSWORD:?请在 deploy/.env 配置 NACOS_ADMIN_PASSWORD}
-      FORCE_SEED: ${FORCE_SEED:-0}
+  # --- Redis: 开发缓存(网关动态路由版本信封 / Pub-Sub 等) --------------------
+  # 6200 容器内外一致; AOF 持久化 + 独立数据卷, 重建容器不丢已写内容;
+  # 无密码仅限开发网络, 生产必须 requirepass/ACL + 仅内网可达
+  redis:
+    image: redis:8.2.1-alpine
+    container_name: aspen-dev-redis
+    restart: unless-stopped
+    command: ["redis-server", "--port", "6200", "--appendonly", "yes"]  # 监听端口与 AOF 持久化
+    ports:
+      - "6200:6200"                    # 宿主机:容器, 本地客户端经 127.0.0.1:6200 直连
     volumes:
-      - ./nacos:/seed:ro
-    entrypoint: ["sh", "/seed/seed.sh"]
+      - aspen-redis-data:/data         # AOF/RDB 落盘目录, 独立成卷
+    healthcheck:
+      # 进内网本机回环打 PING, 返回 PONG 才算健康; -p 显式对准 6200
+      test: ["CMD", "redis-cli", "-p", "6200", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12                      # 最长约 60s, Redis 启动极快
+    mem_limit: 512m                    # 纯缓存场景给半 GB 足够
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
-  aspen-mysql-data:
-  aspen-nacos-logs:
+  aspen-mysql-data:                    # MySQL 数据(含 aspen_nacos_config Schema 与已灌配置)
+  aspen-nacos-logs:                    # Nacos 运行日志
+  aspen-redis-data:                    # Redis AOF 持久化数据

@@ -4,6 +4,7 @@ import com.zax.aspen.admin.api.event.sys.RouteDefinitionPart
 import com.zax.aspen.admin.api.dto.sys.SysRouteSaveDTO
 import com.zax.aspen.admin.biz.entity.sys.SysRouteEntity
 import com.zax.aspen.admin.biz.entity.sys.SysRouteEntityDraft
+import com.zax.aspen.admin.biz.messaging.redis.sys.SysRouteChangedEvent
 import com.zax.aspen.admin.biz.repository.sys.SysRouteRepository
 import com.zax.aspen.common.core.enums.common.EnabledStatus
 import org.junit.jupiter.api.Test

@@ -31,13 +31,16 @@ docker compose -f deploy/docker-compose.yml up -d
 
 ## 4. 服务与地址
 
+端口方案（容器内外一致, 2026-09-06 起）：MySQL=6100 / Redis=6200 / Nacos 主 API=6300。
+
 | 服务 | 地址 | 说明 |
 | --- | --- | --- |
-| Nacos 控制台 | `http://localhost:8080` | Nacos 3.x 控制台独立端口 8080 |
-| Nacos 主 API | `localhost:8848` | 客户端 `server-addr` 指向这里, gRPC 走 9848 |
-| MySQL | `localhost:3306` | 开发共享实例, 本轮只建 `nacos_config` 库; `nacos` 账号仅授权该库 |
+| Nacos 控制台 | `http://localhost:8080` | Nacos 3.x 控制台独立端口, 保持默认 8080 不入 6x00 段 |
+| Nacos 主 API | `localhost:6300` | 客户端 `server-addr` 指向这里, gRPC 自动走主端口+1000 = 7300 |
+| Redis | `localhost:6200` | 开发缓存实例（网关动态路由版本信封等）, AOF 持久化, 无密码仅限开发 |
+| MySQL | `localhost:6100` | 开发共享实例, 当前只建 `aspen_nacos_config` 库; `nacos` 账号仅授权该库 |
 
-9848 对宿主机暴露（IDE 直连运行的本地服务需要 gRPC）；9849/7848 等节点间端口仅在 compose 网络内开放。
+7300 对宿主机暴露（IDE 直连运行的本地服务需要 gRPC）；console 8080 与节点间端口（7848 等）按默认仅在 compose 网络内开放。容器间互访用服务名 + 同端口：`mysql:6100`、`redis:6200`、`nacos:6300`。
 
 ## 5. 鉴权与密钥边界
 
@@ -78,7 +81,7 @@ spring:
       - optional:nacos:aspen-admin-biz-local.yaml
   cloud:
     nacos:
-      server-addr: ${NACOS_ADDR:localhost:8848}
+      server-addr: ${NACOS_ADDR:localhost:6300}
       username: ${NACOS_USERNAME:nacos}
       password: ${NACOS_PASSWORD:aspen-dev-admin}
 ```
@@ -87,14 +90,20 @@ spring:
 - 单元/集成测试隔离：`@SpringBootTest` 增加 `spring.cloud.nacos.config.enabled=false`、`spring.cloud.nacos.config.import-check.enabled=false`、`spring.cloud.nacos.discovery.enabled=false`，与根骨架上下文测试同模式，测试永不连接 Nacos。
 - 新服务接入清单：加同款依赖与 import（公共 dataId 在前、自有 `{service}-biz-local.yaml` 在后）、`deploy/nacos/config/` 增加种子文件、`.env.example` 无需变动。
 
-## 8. 运行验证清单（待有 Docker 的环境执行）
+## 8. 运行验证清单
 
-1. `docker compose -f deploy/docker-compose.yml up -d` 后三个容器全部 healthy/exit 0。
-2. 种子日志显示三个 dataId 首次「已发布」，再次 `up` 显示「已存在跳过」。
-3. 控制台 `http://localhost:8080` 用 `nacos` + `NACOS_ADMIN_PASSWORD` 登录，能看到三个配置。
-4. 本地起 admin-biz（`NACOS_ADDR` 缺省即可）：日志出现 Nacos config 加载，`aspen.gen.dict.enabled` 生效为 true。
-5. 停掉 Nacos 再启动 admin-biz：因 `optional:` 正常启动并回退代码默认值。
+2026-09-06 首次真实执行结果：
 
-## 9. 当前验证状态（如实记录）
+1. ✅ `docker compose -f deploy/docker-compose.yml up -d` 后 mysql/nacos healthy、seeder exit 0。
+2. ✅ 种子日志首次三个 dataId「已发布」，再次 `up` 全部「已存在跳过」。
+3. ✅ API 登录（`nacos` + `NACOS_ADMIN_PASSWORD`）取到 accessToken, 三个配置可鉴权读取; 控制台 `http://localhost:8080` 使用同一凭据, 请自行打开确认界面。
+4. ⬜ 本地起 admin-biz 拉取配置——admin-biz 尚无数据源配置, 服务本身还不能完整运行, 此项与第 5 项待数据库接线完成后执行。
+5. ⬜ 停掉 Nacos 验证 `optional:` 回退——同上。
 
-编写环境无 Docker daemon：已验证 compose/种子 YAML 可解析、`seed.sh` 语法、镜像 tag `nacos/nacos-server:v3.1.1` 与 API 路径均经官方文档核实、admin-biz 加依赖与 optional import 后全量 Gradle 测试通过。第 8 节的运行时验证尚未执行，首次执行后在本节记录结果并锁定镜像 digest。
+## 9. 当前验证状态与运维备注
+
+首次运行验证于 2026-09-06 完成（1-3 项), 三个镜像 digest 已锁定进 compose。执行中发现并处理的问题：
+
+- Nacos 连 MySQL 报 `Public Key Retrieval is not allowed`——MySQL 8 `caching_sha2_password` 下非 SSL 连接必须允许公钥检索, compose 已通过 `MYSQL_SERVICE_DB_PARAM` 固化 `allowPublicKeyRetrieval=true` 等参数。
+- 拉镜像依赖宿主机 Docker daemon 的网络: 本机曾因 Docker Desktop 手动代理指向未运行的 7890 端口而全部失败, 已改为跟随系统代理并为 daemon 配置 `registry-mirrors`(daocloud); 属宿主机配置, 不在本仓库文件中, 换机时需重做。
+- 两个 testcontainers 集成测试（字典播种、路由分发）随 Docker 可用首次真实执行并全部通过。

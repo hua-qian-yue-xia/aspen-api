@@ -383,6 +383,7 @@ aspen/
     │   │   │   └── fallback/                   # Sentinel/Feign 降级实现
     │   │   ├── cache/                           # <Service>CacheKeys 键工厂，CacheKey 的唯一构造入口
     │   │   ├── cache/redis/                     # Redis Cache 封装、回源与失败策略
+    │   │   ├── messaging/redis/                 # 共享存储介质分发的执行件、启动触发与进程内信号
     │   │   ├── messaging/rocketmq/
     │   │   │   ├── producer/                   # 业务事件发布
     │   │   │   ├── consumer/                   # 消费入口与幂等处理
@@ -444,7 +445,7 @@ RocketMQ Consumer -> Service
 | Redis 缓存封装 | `Cache` | `UserCache` |
 | MQ 生产/消费 | `Producer` / `Consumer` | `UserEventProducer`、`UserCreatedConsumer` |
 | 共享存储分发 | `Publisher` | `RouteDefinitionPublisher` |
-| 启动期业务编排 | `StartupRunner` | `RoutePublishStartupRunner` |
+| 分发链路启动触发 | `StartupRunner` | `RoutePublishStartupRunner` |
 | 进程内领域事件 | `Event` | `SysRouteChangedEvent` |
 | SPI 承接与播种 | `Seeder` | `GenDictSeeder` |
 | Spring 配置 | `Configuration` | `UserFeignConfiguration` |
@@ -452,7 +453,7 @@ RocketMQ Consumer -> Service
 
 只有实际定义了 `UserService` 接口时才能创建 `UserServiceImpl`；如果没有多实现、替换或独立接口的需要，直接使用具体的 `UserService`，禁止为了形式创建一对空接口和唯一实现。禁止使用缺少职责语义的 `CommonManager`、`DataHandler`、`BizUtils` 等名称。
 
-共享存储分发执行件（`*Publisher`）、启动期执行的业务编排（`*StartupRunner`）、进程内领域事件（如 `SysRouteChangedEvent`）与公共模块 SPI 的承接实现（`*Seeder`）都是业务编排的组成部分，与所属业务组的 Service 同包放在 `service/{group}`；`bootstrap` 与 `config` 禁止承载业务流程（见 7.6 约束 13）。进程内事件只在进程内触发协作，不进入 `api/event`，后者只承载跨服务分发契约。业务组归属的类型安全配置属性（`*Properties`）放在 `config/{group}`，跨组的全局装配留在 `config` 根。
+共享存储分发执行件（`*Publisher`）、分发链路的启动触发器（`*StartupRunner`）与链路的进程内事件（如 `SysRouteChangedEvent`）是跨服务分发机制的执行件，按介质归档在 `messaging/{medium}/{group}`，Redis 介质为 `messaging/redis/{group}`，对应契约类型在 `api/event`；`bootstrap` 与 `config` 禁止承载业务流程（见 7.6 约束 13），启动触发器随所属链路归档。进程内事件只在进程内触发协作，不进入 `api/event`，后者只承载跨服务分发契约。公共模块 SPI 的承接实现（`*Seeder`）与业务 Service 同包放在 `service/{group}`。业务组归属的类型安全配置属性（`*Properties`）放在 `config/{group}`，跨组的全局装配留在 `config` 根。
 
 ### 7.8 源码与可见性规则
 
@@ -615,6 +616,9 @@ aspen-admin-biz/
     │   │   │   └── redis/
     │   │   │       ├── upm/
     │   │   │       └── sys/
+    │   │   ├── messaging/redis/
+    │   │   │   ├── upm/
+    │   │   │   └── sys/                 # 路由快照分发链路：Publisher、StartupRunner、进程内事件
     │   │   └── messaging/rocketmq/
     │   │       ├── upm/
     │   │       └── sys/
@@ -638,11 +642,14 @@ aspen-admin-biz/
         ├── entity/
         │   ├── upm/
         │   └── sys/
+        ├── messaging/
+        │   ├── upm/
+        │   └── sys/
         ├── integration/
         └── architecture/
 ```
 
-目录按实际职责创建，不为保持树形完整而创建空包。`client/feign`、`cache/redis`、`messaging/rocketmq` 层内的 `configuration`、`fallback`、`producer`、`consumer`、`outbox` 等子目录按 7.5 节语义放在对应业务组之下，按需创建。Admin 业务类禁止直接放在 `controller`、`service`、`repository`、`entity` 等层目录根部，必须进入 `upm` 或 `sys` 业务组子目录，否则不同业务组会再次混合。
+目录按实际职责创建，不为保持树形完整而创建空包。`client/feign`、`cache/redis`、`messaging/redis`、`messaging/rocketmq` 层内的 `configuration`、`fallback`、`producer`、`consumer`、`outbox` 等子目录按 7.5 节语义放在对应业务组之下，按需创建。Admin 业务类禁止直接放在 `controller`、`service`、`repository`、`entity` 等层目录根部，必须进入 `upm` 或 `sys` 业务组子目录，否则不同业务组会再次混合。
 
 #### 7.10.3 业务组职责
 

@@ -1,4 +1,4 @@
-package com.zax.aspen.admin.biz.service.sys
+package com.zax.aspen.admin.biz.messaging.redis.sys
 
 /**
  * 路由表发生已提交变更的领域事件

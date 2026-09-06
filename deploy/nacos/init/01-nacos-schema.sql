@@ -2,7 +2,7 @@
 -- 来源: alibaba/nacos 3.1.1 distribution/conf/mysql-schema.sql (Apache License 2.0), 内容保持原样仅追加 USE
 -- 执行时机: MySQL 数据卷首次初始化 (docker-entrypoint-initdb.d), 库与账号由 MYSQL_DATABASE/MYSQL_USER 自动创建
 
-USE nacos_config;
+USE aspen_nacos_config;
 
 /******************************************/
 /* 表名称 = config_info */

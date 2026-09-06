@@ -4,6 +4,7 @@ import com.zax.aspen.admin.api.event.sys.RouteDefinitionSnapshot
 import com.zax.aspen.admin.api.dto.sys.SysRouteSaveDTO
 import com.zax.aspen.admin.api.vo.sys.SysRouteVO
 import com.zax.aspen.admin.biz.entity.sys.SysRouteEntity
+import com.zax.aspen.admin.biz.messaging.redis.sys.SysRouteChangedEvent
 import com.zax.aspen.admin.biz.repository.sys.SysRouteRepository
 import jakarta.annotation.Resource
 import org.babyfish.jimmer.sql.exception.SaveException

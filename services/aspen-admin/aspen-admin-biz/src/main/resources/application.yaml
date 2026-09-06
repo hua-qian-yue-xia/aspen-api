@@ -1,32 +1,22 @@
+server:
+  port: 7100
+
 spring:
   application:
     # upm/sys 共享同一个服务名, 进程和 Docker 镜像
-    name: aspen-admin
+    name: aspen-admin-biz
   config:
     import:
       # 配置中心分层: 公共配置在前, 服务私有配置在后; optional 前缀保证本地无 Nacos 也能启动
-      - optional:nacos:aspen-common-local.yaml
-      - optional:nacos:aspen-admin-biz-local.yaml
+      - optional:nacos:aspen-common
+      - optional:nacos:${spring.application.name}
+  # datasource/jimmer/aspen 等运行配置统一放 Nacos 的 aspen-admin-biz, 本文件只保留接线(地址/凭据/命名空间)
   cloud:
     nacos:
       # 地址与凭据经环境变量注入, 默认值仅供本地开发; 生产必须覆盖且密码不得写进配置文件
-      server-addr: ${NACOS_ADDR:localhost:8848}
-      username: ${NACOS_USERNAME:nacos}
-      password: ${NACOS_PASSWORD:aspen-dev-admin}
-
-jimmer:
-  # Kotlin 项目必须显式声明, 否则 starter 只装配 Java JSqlClient, KSqlClient 仓储无法注入
-  language: kotlin
-
-aspen:
-  gen:
-    dict:
-      # 枚举字典播种只用于开发与联调, 生产环境禁止开启
-      enabled: false
-  admin:
-    route-api:
-      # 路由管理 internal 契约默认关闭, 需要时显式开启, RBAC 就绪后转正式管理 API
-      enabled: false
-  routes:
-    # 路由分发的 Redis 隔离段, 必须与 Gateway 侧 aspen.routes.environment 保持一致
-    environment: local
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+      server-addr: ${NACOS_HOST}:${NACOS_PORT}
+      config:
+        namespace: ${NACOS_NAMESPACE:prod}
+        file-extension: yaml

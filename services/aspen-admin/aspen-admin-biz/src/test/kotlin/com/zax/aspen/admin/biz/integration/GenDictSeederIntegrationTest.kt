@@ -78,7 +78,7 @@ class GenDictSeederIntegrationTest {
                 """
                 SELECT i.sort_order FROM sys_dict_item i
                 JOIN sys_dict d ON i.dict_id = d.dict_id
-                WHERE d.dict_code = 'gender' ORDER BY i.item_id
+                WHERE d.dict_code = 'gender' ORDER BY i.dict_item_id
                 """.trimIndent(),
             ),
         )

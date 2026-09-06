@@ -1,4 +1,4 @@
-package com.zax.aspen.admin.biz.service.sys
+package com.zax.aspen.admin.biz.messaging.redis.sys
 
 import jakarta.annotation.Resource
 import org.springframework.boot.ApplicationArguments

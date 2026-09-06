@@ -1,4 +1,4 @@
-package com.zax.aspen.admin.biz.service.sys
+package com.zax.aspen.admin.biz.messaging.redis.sys
 
 import com.zax.aspen.admin.api.constant.GatewayRouteContract
 import com.zax.aspen.admin.api.event.sys.RouteCatalogSnapshot
