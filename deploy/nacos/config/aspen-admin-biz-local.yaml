@@ -1,0 +1,7 @@
+# Aspen Admin 本地环境配置 (dataId: aspen-admin-biz-local.yaml, Group: DEFAULT_GROUP)
+# 演示配置分层: 代码默认 aspen.gen.dict.enabled=false, 本地环境经配置中心开启枚举字典播种
+
+aspen:
+  gen:
+    dict:
+      enabled: true

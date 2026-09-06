@@ -5,7 +5,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-/** 验证 SYS 迁移脚本覆盖完整表集和关键数据库约束 */
+/**
+ * 验证 SYS 迁移脚本覆盖完整表集和关键数据库约束
+ */
 class SysMigrationTest {
     /** 验证迁移只创建 3 张 SYS 表并使用统一字符集 */
     @Test

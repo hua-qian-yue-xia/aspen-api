@@ -15,7 +15,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
-/** 验证 UPM Jimmer 模型的表所有权、命名和公共元数据语义 */
+/**
+ * 验证 UPM Jimmer 模型的表所有权、命名和公共元数据语义
+ */
 class UpmEntityMappingTest {
     /** 验证完整模型包含 24 个 UPM 实体且全部映射到 UPM 表 */
     @Test
@@ -123,7 +125,11 @@ class UpmEntityMappingTest {
         }
     }
 
-    /** 把属性名按 Jimmer 默认策略转为蛇形列名 */
+    /**
+     * 把属性名按 Jimmer 默认策略转为蛇形列名
+     *
+     * @return 小写并以下划线分隔的列名
+     */
     private fun String.toSnakeCase(): String = replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").lowercase()
 
     /** 从测试类路径读取版本化 UPM 迁移脚本 */

@@ -7,7 +7,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-/** 验证 AspenEnum 桥接转换器的双向映射与失败语义 */
+/**
+ * 验证 AspenEnum 桥接转换器的双向映射与失败语义
+ */
 class AspenEnumProvidersTest {
     /** 验证枚举按 code 转为数据库存储值 */
     @Test
@@ -39,7 +41,12 @@ class AspenEnumProvidersTest {
         assertFailsWith<Exception> { genderProvider.toScalar("other") }
     }
 
-    /** 创建按 code 映射的转换器 */
+    /**
+     * 创建按 code 映射的转换器
+     *
+     * @param enumType 待桥接为数据库存储值映射的枚举类型
+     * @return 由 AspenEnumProviders 创建并强转为 ScalarProvider<T, String> 的转换器
+     */
     @Suppress("UNCHECKED_CAST")
     private fun <T : Enum<T>> provider(enumType: Class<T>): ScalarProvider<T, String> =
         AspenEnumProviders.create(enumType) as ScalarProvider<T, String>

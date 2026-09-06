@@ -45,3 +45,6 @@ out/
 .video_agent/
 .zcode/
 https:
+
+### 部署密钥 ###
+deploy/.env

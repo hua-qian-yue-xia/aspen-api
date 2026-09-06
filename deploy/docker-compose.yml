@@ -1,0 +1,97 @@
+# Aspen 开发环境 Nacos 配置中心
+# 服务拓扑: MySQL(共享开发实例) <- Nacos 单节点(外部 MySQL Schema 持久化) <- 一次性配置种子
+# 启动顺序由健康状态驱动, 不使用固定 sleep; 密钥与账号全部来自同目录 .env (不入库)
+# 版本基线: nacos/nacos-server v3.1.1 对齐 SCA 管理的 Nacos Client 3.1.1, digest 待首次集成测试后锁定
+
+name: aspen-dev
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: aspen-dev-mysql
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 deploy/.env 配置 MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: nacos_config
+      MYSQL_USER: nacos
+      MYSQL_PASSWORD: ${NACOS_MYSQL_PASSWORD:?请在 deploy/.env 配置 NACOS_MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - aspen-mysql-data:/var/lib/mysql
+      # Nacos 官方 3.1.1 Schema, 仅在数据卷首次初始化时执行
+      - ./nacos/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "--password=$${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nacos:
+    image: nacos/nacos-server:v3.1.1
+    container_name: aspen-dev-nacos
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_PORT: "3306"
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_USER: nacos
+      MYSQL_SERVICE_PASSWORD: ${NACOS_MYSQL_PASSWORD}
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:?请在 deploy/.env 配置 NACOS_AUTH_TOKEN}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:?请在 deploy/.env 配置 NACOS_AUTH_IDENTITY_KEY}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:?请在 deploy/.env 配置 NACOS_AUTH_IDENTITY_VALUE}
+    ports:
+      # 8848 主 API + 9848 客户端 gRPC 对宿主机开放; 3.x 控制台独立端口 8080
+      - "8848:8848"
+      - "9848:9848"
+      - "8080:8080"
+    volumes:
+      - aspen-nacos-logs:/home/nacos/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8848/nacos/v3/admin/core/state/readiness || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 30s
+    mem_limit: 2g
+    cpus: 1.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nacos-config-seeder:
+    image: curlimages/curl:8.11.1
+    container_name: aspen-dev-nacos-seeder
+    restart: "no"
+    depends_on:
+      nacos:
+        condition: service_healthy
+    environment:
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USER: nacos
+      NACOS_PASSWORD: ${NACOS_ADMIN_PASSWORD:?请在 deploy/.env 配置 NACOS_ADMIN_PASSWORD}
+      FORCE_SEED: ${FORCE_SEED:-0}
+    volumes:
+      - ./nacos:/seed:ro
+    entrypoint: ["sh", "/seed/seed.sh"]
+
+volumes:
+  aspen-mysql-data:
+  aspen-nacos-logs:

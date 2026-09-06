@@ -1,6 +1,8 @@
 package com.zax.aspen.common.core.enums
 
-/** 所有业务枚举的统一契约 */
+/**
+ * 所有业务枚举的统一契约
+ */
 interface AspenEnum {
     /**
      * 持久化存储值

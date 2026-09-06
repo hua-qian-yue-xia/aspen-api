@@ -18,7 +18,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** 验证缓存公共模块的自动配置条件和严格缓存策略 */
+/**
+ * 验证缓存公共模块的自动配置条件和严格缓存策略
+ */
 class AspenCacheAutoConfigurationTest {
     /** 创建同时加载 Boot Redis 和 Aspen 缓存配置的隔离上下文 */
     private val contextRunner = ApplicationContextRunner()
@@ -108,20 +110,34 @@ class AspenCacheAutoConfigurationTest {
             }
     }
 
-    /** 提供覆盖默认缓存管理器, RedisTemplate 和缓存操作的用户配置 */
+    /**
+     * 提供覆盖默认缓存管理器, RedisTemplate 和缓存操作的用户配置
+     */
     @Configuration(proxyBeanMethods = false)
     class CustomCacheBeansConfiguration {
-        /** 注册业务服务自行定义的 CacheManager */
+        /**
+         * 注册业务服务自行定义的 CacheManager
+         *
+         * @return mock 创建的 CacheManager 测试替身
+         */
         @Bean
         fun customCacheManager(): CacheManager = mock(CacheManager::class.java)
 
-        /** 使用约定名称注册业务服务自行定义的 RedisTemplate */
+        /**
+         * 使用约定名称注册业务服务自行定义的 RedisTemplate
+         *
+         * @return mock 自 RedisTemplate 并强转为受控泛型签名的测试替身
+         */
         @Bean("aspenRedisTemplate")
         @Suppress("UNCHECKED_CAST")
         fun customRedisTemplate(): RedisTemplate<String, Any> =
             mock(RedisTemplate::class.java) as RedisTemplate<String, Any>
 
-        /** 注册业务服务自行定义的显式缓存操作 */
+        /**
+         * 注册业务服务自行定义的显式缓存操作
+         *
+         * @return mock 创建的 AspenCacheOperations 测试替身
+         */
         @Bean
         fun customCacheOperations(): AspenCacheOperations = mock(AspenCacheOperations::class.java)
     }

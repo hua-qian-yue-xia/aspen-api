@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: aspen-gateway
+  # 生产配置经 Nacos 的 aspen-gateway-{profile}.yaml 覆盖; optional 保证
+  # Nacos 不可用时网关仍可按代码内安全默认值启动 (技术架构 13 配置层次)
+  config:
+    import: "optional:nacos:aspen-gateway.yaml"
+  data:
+    redis:
+      # 显式固化 Redis 超时安全默认值, 网络黑洞时快速失败而不是阻塞在
+      # Lettuce 默认的 connect 10s / command 60s (技术架构 14.4)
+      connect-timeout: 3s
+      timeout: 5s
+
+aspen:
+  routes:
+    # 路由分发的 Redis 隔离段, 必须与 Admin 侧 aspen.routes.environment 保持一致
+    environment: local

@@ -27,7 +27,13 @@ class CacheSettings private constructor(
     /** 使用统一部署命名空间的 Redis Key 构建器 */
     val keyBuilder: CacheKeyBuilder,
 ) {
-    /** 获取 Cache 定义并校验显式 Key 的业务命名空间 */
+    /**
+     * 获取 Cache 定义并校验显式 Key 的业务命名空间
+     *
+     * @param cacheName 已声明的稳定 Cache 名称
+     * @param key 可选的业务缓存 Key, 命中声明定义时命名空间必须一致, 未声明 Cache 时必须提供
+     * @return 命中声明的定义, 或由 Key 推导并套用默认 TTL 的未声明定义
+     */
     fun definition(cacheName: String, key: CacheKey? = null): CacheDefinition {
         definitions[cacheName]?.let { definition ->
             if (key != null) {
@@ -45,7 +51,13 @@ class CacheSettings private constructor(
 
     /** 负责创建和校验不可变缓存设置 */
     companion object {
-        /** 从外部配置和应用名称构建不可变缓存设置 */
+        /**
+         * 从外部配置和应用名称构建不可变缓存设置
+         *
+         * @param properties 绑定 aspen.cache 前缀的外部配置
+         * @param applicationName spring.application.name 的取值, 未显式配置 service 时作为服务标识, 可为 `null`
+         * @return 通过全部启动期校验的不可变缓存设置
+         */
         fun from(properties: AspenCacheProperties, applicationName: String?): CacheSettings {
             val service = properties.service.ifBlank { applicationName.orEmpty() }
             val keyBuilder = CacheKeyBuilder(
@@ -97,7 +109,11 @@ class CacheSettings private constructor(
             )
         }
 
-        /** 校验 Cache 名称可以安全用于配置索引和 Redis 前缀 */
+        /**
+         * 校验 Cache 名称可以安全用于配置索引和 Redis 前缀
+         *
+         * @param cacheName 待校验的稳定 Cache 名称
+         */
         private fun requireValidCacheName(cacheName: String) {
             require(CACHE_NAME_PATTERN.matches(cacheName)) {
                 "Cache 名称 '$cacheName' 必须以 ASCII 字母或数字开头, 且只能包含字母、数字、'.'、'_' 或 '-'"

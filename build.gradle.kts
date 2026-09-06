@@ -158,6 +158,19 @@ allprojects {
                     "$sourceProjectPath 不能依赖运行时基础设施 $dependencyGroup:$dependencyName"
                 }
             }
+            // Redis 客户端只能由 common-cache 声明并经其受控操作类暴露,
+            // 其余模块 (含 gateway 的运行时组合) 一律经 common-cache 访问 Redis;
+            // 根模块是路线图第 12 步待移除的迁移期骨架, 移除前暂时豁免
+            val isLegacyRootSkeleton = sourceProjectPath == ":"
+            if (
+                dependencyName == "spring-boot-starter-data-redis" &&
+                sourceProjectPath != AspenProjects.COMMON_CACHE &&
+                !isLegacyRootSkeleton
+            ) {
+                require(false) {
+                    "$sourceProjectPath 不能直接依赖 spring-boot-starter-data-redis, 请改为依赖 ${AspenProjects.COMMON_CACHE}"
+                }
+            }
         }
 
         resolutionStrategy {

@@ -10,7 +10,9 @@ import org.mockito.Mockito.verify
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
-/** 验证租户过滤器对查询条件和缺失上下文行为的处理 */
+/**
+ * 验证租户过滤器对查询条件和缺失上下文行为的处理
+ */
 class TenantFilterTest {
     /** 验证存在租户上下文时把租户等值条件追加到查询 */
     @Test
@@ -34,7 +36,12 @@ class TenantFilterTest {
         assertFailsWith<IllegalStateException> { filter.filter(args) }
     }
 
-    /** 构造携带 tenantId 属性表达式的过滤参数 */
+    /**
+     * 构造 eq(42L) 命中时返回指定条件的租户属性表达式 mock
+     *
+     * @param predicate eq(42L) 时返回的目标查询条件
+     * @return mock 自 PropExpression 并强转为 Long 类型的替身
+     */
     @Suppress("UNCHECKED_CAST")
     private fun mockPropExpression(predicate: Predicate): PropExpression<Long> {
         val propExpression = mock(PropExpression::class.java) as PropExpression<Long>
@@ -42,7 +49,12 @@ class TenantFilterTest {
         return propExpression
     }
 
-    /** 构造携带租户属性列的过滤参数 mock */
+    /**
+     * 构造携带租户属性列的过滤参数 mock
+     *
+     * @param tenantIdProp table 取 tenantId 属性时返回的表达式, 传 `null` 时不设置该桩
+     * @return mock 自 FilterArgs 的替身, 其 table 返回 TenantScopedProps mock
+     */
     @Suppress("UNCHECKED_CAST")
     private fun mockArgs(tenantIdProp: PropExpression<Long>? = null): FilterArgs<TenantScopedProps> {
         val table = mock(TenantScopedProps::class.java)

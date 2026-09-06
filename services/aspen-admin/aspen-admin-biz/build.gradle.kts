@@ -17,6 +17,14 @@ java {
     }
 }
 
+dependencyManagement {
+    imports {
+        // Spring Cloud 与 Spring Cloud Alibaba 的组件版本必须由正式 BOM 统一管理, 与根构建同源
+        mavenBom("org.springframework.cloud:spring-cloud-dependencies:${libs.versions.springCloud.get()}")
+        mavenBom("com.alibaba.cloud:spring-cloud-alibaba-dependencies:${libs.versions.springCloudAlibaba.get()}")
+    }
+}
+
 dependencies {
     implementation(project(AspenProjects.ADMIN_API))
     implementation(project(AspenProjects.COMMON_DATABASE))
@@ -24,6 +32,12 @@ dependencies {
 
     // 当前阶段只提供可编译, 可启动的最小 MVC 运行时, 不提前引入未使用的基础设施
     implementation(libs.spring.boot.starter.webmvc)
+    // JDBC 持久化服务基线: 数据源、事务管理 (@Transactional/事务事件) 与 Spring DAO 异常体系
+    implementation(libs.spring.boot.starter.jdbc)
+    // 路由快照分发等 Redis 访问一律经 common-cache 受控操作类, 业务代码不直接依赖 Redis 客户端
+    implementation(project(AspenProjects.COMMON_CACHE))
+    // 配置中心客户端: 只拉配置, 注册发现暂未接入; optional 导入保证无 Nacos 也能启动
+    implementation(libs.spring.cloud.alibaba.nacos.config)
     implementation(libs.kotlin.reflect)
     implementation(libs.jackson.module.kotlin)
     ksp(libs.jimmer.ksp)

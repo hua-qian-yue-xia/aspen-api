@@ -23,7 +23,12 @@ class CacheKeyBuilder(
         .map { CacheKeyRules.requireSegment(it, "allowedGroups") }
         .toSet()
 
-    /** 将业务缓存 Key 转换为完整 Redis Key */
+    /**
+     * 将业务缓存 Key 转换为完整 Redis Key
+     *
+     * @param key 不含部署命名空间的业务缓存 Key
+     * @return 拼接部署命名空间与全部业务段后的完整 Redis Key
+     */
     fun build(key: CacheKey): String = buildString {
         requireAllowedGroup(key.group)
         append(namespace)
@@ -37,7 +42,13 @@ class CacheKeyBuilder(
         }
     }
 
-    /** 为 Spring Cache 构建指定业务组和领域的 Key 前缀 */
+    /**
+     * 为 Spring Cache 构建指定业务组和领域的 Key 前缀
+     *
+     * @param group 目标 Cache 所属的服务内业务组
+     * @param domain 目标 Cache 所属的业务领域
+     * @return 以分隔符结尾的完整 Redis Key 前缀
+     */
     fun prefix(group: String, domain: String): String = buildString {
         requireAllowedGroup(group)
         append(namespace)
@@ -48,7 +59,11 @@ class CacheKeyBuilder(
         append(SEPARATOR)
     }
 
-    /** 在配置白名单存在时拒绝当前服务未声明的业务组 */
+    /**
+     * 在配置白名单存在时拒绝当前服务未声明的业务组
+     *
+     * @param group 待校验的服务内业务组
+     */
     private fun requireAllowedGroup(group: String) {
         if (allowedGroups.isNotEmpty()) {
             require(group in allowedGroups) {

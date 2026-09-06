@@ -1,6 +1,8 @@
 package com.zax.aspen.common.core.error
 
-/** 定义真正跨服务使用的公共错误, 业务错误仍归所属服务 API 模块 */
+/**
+ * 定义真正跨服务使用的公共错误, 业务错误仍归所属服务 API 模块
+ */
 enum class CommonErrorCode(
     /** 稳定的公共机器错误码 */
     override val code: String,

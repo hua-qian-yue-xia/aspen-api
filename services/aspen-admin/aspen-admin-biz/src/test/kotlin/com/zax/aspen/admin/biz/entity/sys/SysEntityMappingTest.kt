@@ -12,7 +12,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
-/** 验证 SYS Jimmer 模型的表所有权、命名和公共元数据语义 */
+/**
+ * 验证 SYS Jimmer 模型的表所有权、命名和公共元数据语义
+ */
 class SysEntityMappingTest {
     /** 验证 SYS 模型包含 3 个实体且全部映射到 SYS 表 */
     @Test
@@ -113,7 +115,11 @@ class SysEntityMappingTest {
         }
     }
 
-    /** 把属性名按 Jimmer 默认策略转为蛇形列名 */
+    /**
+     * 把属性名按 Jimmer 默认策略转为蛇形列名
+     *
+     * @return 小写并以下划线分隔的列名
+     */
     private fun String.toSnakeCase(): String = replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").lowercase()
 
     /** 从测试类路径读取版本化 SYS 迁移脚本 */

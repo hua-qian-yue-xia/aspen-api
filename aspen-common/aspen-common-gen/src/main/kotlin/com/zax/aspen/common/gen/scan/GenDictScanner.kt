@@ -12,7 +12,11 @@ class GenDictScanner(
     /** 允许扫描的包前缀 */
     private val basePackages: List<String>,
 ) {
-    /** 扫描标注 @GenDict 的 AspenEnum 枚举, 按编码升序返回; 存在重复编码时拒绝 */
+    /**
+     * 扫描标注 @GenDict 的 AspenEnum 枚举, 按编码升序返回; 存在重复编码时拒绝
+     *
+     * @return 按字典编码升序排列且编码唯一的字典目录
+     */
     fun scan(): GenDictCatalog {
         val scanner = ClassPathScanningCandidateComponentProvider(false)
         scanner.addIncludeFilter(AssignableTypeFilter(AspenEnum::class.java))
@@ -28,7 +32,12 @@ class GenDictScanner(
         return GenDictCatalog(descriptors.sortedBy { it.dictCode })
     }
 
-    /** 把单个枚举转换为字典描述; 未标注 @GenDict 时返回 null 表示不参与播种 */
+    /**
+     * 把单个枚举转换为字典描述; 未标注 @GenDict 时返回 null 表示不参与播种
+     *
+     * @param enumType 实现 AspenEnum 的枚举类型
+     * @return 字典描述, 枚举未标注 @GenDict 时返回 `null`
+     */
     private fun describe(enumType: Class<*>): GenDictDescriptor? {
         val genDict = enumType.getAnnotation(GenDict::class.java) ?: return null
         val items = enumType.enumConstants

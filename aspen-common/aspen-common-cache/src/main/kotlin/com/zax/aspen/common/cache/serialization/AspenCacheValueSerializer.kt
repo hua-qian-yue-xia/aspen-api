@@ -31,7 +31,15 @@ class AspenCacheValueSerializer(
         require(maxEntryBytes >= 1) { "maxEntryBytes 必须为正数" }
     }
 
-    /** 将缓存值序列化为 JSON 并在写入 Redis 前校验大小 */
+    /**
+     * 将缓存值序列化为 JSON 并校验大小
+     *
+     * 相对 RedisSerializer 基础契约的附加行为: 序列化结果超过构造时配置的字节数上限时
+     * 抛出 SerializationException, 阻止超限值写入 Redis
+     *
+     * @param value 待序列化的缓存值, 允许 `null`
+     * @return 序列化后的 JSON 字节内容
+     */
     override fun serialize(value: Any?): ByteArray {
         val bytes = delegate.serialize(value)
         if (bytes.size > maxEntryBytes) {
@@ -42,7 +50,6 @@ class AspenCacheValueSerializer(
         return bytes
     }
 
-    /** 在固定类型白名单约束下反序列化缓存值 */
     override fun deserialize(bytes: ByteArray?): Any? = delegate.deserialize(bytes)
 
     /** 保存固定且不可通过外部配置扩大的类型白名单 */

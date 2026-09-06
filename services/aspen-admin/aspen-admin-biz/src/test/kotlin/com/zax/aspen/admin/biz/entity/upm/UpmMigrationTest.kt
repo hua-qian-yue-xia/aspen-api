@@ -6,7 +6,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-/** 验证 UPM 迁移脚本覆盖完整表集和关键数据库约束 */
+/**
+ * 验证 UPM 迁移脚本覆盖完整表集和关键数据库约束
+ */
 class UpmMigrationTest {
     /** 验证迁移只创建 24 张 UPM 表并使用统一字符集 */
     @Test

@@ -21,4 +21,6 @@ object AspenProjects {
     const val ADMIN_API = ":aspen-admin-api"
 
     const val ADMIN_BIZ = ":aspen-admin-biz"
+
+    const val GATEWAY = ":aspen-gateway"
 }

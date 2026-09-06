@@ -10,6 +10,10 @@ import com.zax.aspen.common.gen.scan.GenDictCatalog
  * common-gen 的启动 Runner 在播种开启时把目录投递给容器内的全部实现
  */
 fun interface GenDictSink {
-    /** 接收本服务扫描出的字典目录并投递到目的地 */
+    /**
+     * 接收本服务扫描出的字典目录并投递到目的地
+     *
+     * @param catalog 本服务扫描出的字典目录 (条目已按字典编码升序排列)
+     */
     fun deliver(catalog: GenDictCatalog)
 }

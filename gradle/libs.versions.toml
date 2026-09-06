@@ -23,6 +23,7 @@ spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-
 spring-boot-starter-security-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-security-oauth2-resource-server" }
 spring-boot-starter-cache = { module = "org.springframework.boot:spring-boot-starter-cache" }
 spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc" }
 spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure" }
 spring-boot-starter-quartz = { module = "org.springframework.boot:spring-boot-starter-quartz" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
@@ -70,7 +71,8 @@ testcontainers-mysql = { module = "org.testcontainers:testcontainers-mysql" }
 # 普通 API 模块的最小契约依赖, Feign Core 仅在确实发布 Client 时单独增加
 api-contract = ["spring-web", "jakarta-validation-api", "jackson-module-kotlin"]
 
-# 独立 Gateway 模块使用该组合, 严禁与业务 MVC/Jimmer 运行时混用
+# 独立 Gateway 模块使用该组合, 严禁与业务 MVC/Jimmer 运行时混用;
+# Redis 客户端不经本组合引入, 一律经 common-cache 受控操作类访问
 gateway-runtime = [
     "spring-cloud-starter-gateway",
     "spring-cloud-alibaba-nacos-discovery",
@@ -81,7 +83,6 @@ gateway-runtime = [
     "spring-boot-starter-security",
     "spring-boot-starter-security-oauth2-resource-server",
     "spring-boot-starter-actuator",
-    "spring-boot-starter-data-redis",
 ]
 
 [plugins]

@@ -1,5 +1,6 @@
-package com.zax.aspen.admin.biz.bootstrap
+package com.zax.aspen.admin.biz.integration
 
+import com.zax.aspen.admin.biz.bootstrap.AspenAdminApplication
 import com.zax.aspen.admin.biz.service.sys.GenDictSeeder
 import com.zax.aspen.common.gen.autoconfigure.AspenGenProperties
 import com.zax.aspen.common.gen.scan.GenDictCatalog
@@ -27,7 +28,16 @@ import kotlin.test.assertNull
  */
 @EnabledIf(value = "dockerAvailable", disabledReason = "Docker 不可用, 跳过真实写路径验证")
 @TestMethodOrder(OrderAnnotation::class)
-@SpringBootTest(classes = [AspenAdminApplication::class], webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(
+    classes = [AspenAdminApplication::class],
+    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    properties = [
+        // 集成测试聚焦数据库播种, 不依赖也不连接外部 Nacos
+        "spring.cloud.nacos.config.enabled=false",
+        "spring.cloud.nacos.config.import-check.enabled=false",
+        "spring.cloud.nacos.discovery.enabled=false",
+    ],
+)
 class GenDictSeederIntegrationTest {
     /** 验证上下文启动播种已写入三个通用字典及其项 */
     @Test
@@ -68,7 +78,7 @@ class GenDictSeederIntegrationTest {
                 """
                 SELECT i.sort_order FROM sys_dict_item i
                 JOIN sys_dict d ON i.dict_id = d.dict_id
-                WHERE d.dict_code = 'gender' ORDER BY i.dict_id
+                WHERE d.dict_code = 'gender' ORDER BY i.item_id
                 """.trimIndent(),
             ),
         )
@@ -182,7 +192,12 @@ class GenDictSeederIntegrationTest {
     @Autowired
     private lateinit var dataSource: DataSource
 
-    /** 查询单值并以字符串返回, 布尔与整数按 MySQL 原样文本化 */
+    /**
+     * 查询单值并以字符串返回, 布尔与整数按 MySQL 原样文本化
+     *
+     * @param sql 待执行的单值查询 SQL
+     * @return 首行首列的文本值, 无结果行时返回 `null`
+     */
     private fun queryString(sql: String): String? =
         dataSource.connection.use { connection ->
             connection.createStatement().use { statement ->
@@ -192,7 +207,12 @@ class GenDictSeederIntegrationTest {
             }
         }
 
-    /** 查询整列并以字符串列表返回 */
+    /**
+     * 查询整列并以字符串列表返回
+     *
+     * @param sql 待执行的整列查询 SQL
+     * @return 首列全部取值的文本列表, 无结果行时为空列表
+     */
     private fun queryStrings(sql: String): List<String> =
         dataSource.connection.use { connection ->
             connection.createStatement().use { statement ->
@@ -202,7 +222,11 @@ class GenDictSeederIntegrationTest {
             }
         }
 
-    /** 直接执行维护用 SQL */
+    /**
+     * 直接执行维护用 SQL
+     *
+     * @param sql 待执行的维护语句, 如改写字典项展示属性
+     */
     private fun execute(sql: String) {
         dataSource.connection.use { connection ->
             connection.createStatement().use { statement -> statement.execute(sql) }
@@ -210,13 +234,18 @@ class GenDictSeederIntegrationTest {
     }
 
     private companion object {
+        /**
+         * 探测本机 Docker 守护进程是否可用
+         *
+         * @return 可建立连接时返回 true, 探测失败按 false 处理
+         */
         @JvmStatic
         fun dockerAvailable(): Boolean =
             runCatching { DockerClientFactory.instance().isDockerAvailable }.getOrDefault(false)
 
         private val mysql: MySQLContainer<*>? =
             if (dockerAvailable()) {
-                MySQLContainer<Nothing>("mysql:8.4").apply { start() }
+                MySQLContainer<Nothing>("mysql:8").apply { start() }
             } else {
                 null
             }
@@ -230,6 +259,11 @@ class GenDictSeederIntegrationTest {
             }
         }
 
+        /**
+         * 把 Testcontainers MySQL 连接信息与字典播种开关注册为动态属性
+         *
+         * @param registry Spring 测试上下文的动态属性注册器
+         */
         @JvmStatic
         @DynamicPropertySource
         fun registerProperties(registry: DynamicPropertyRegistry) {
@@ -240,10 +274,21 @@ class GenDictSeederIntegrationTest {
             registry.add("aspen.gen.dict.enabled") { "true" }
         }
 
-        /** 多语句脚本需要 allowMultiQueries, 关闭 SSL 并允许本机取公钥 */
+        /**
+         * 构造可执行多语句脚本的 JDBC 连接地址
+         *
+         * @param container 已启动的 MySQL 测试容器
+         * @return 追加 allowMultiQueries=true、关闭 SSL 并允许本机取公钥后的连接地址
+         */
         private fun jdbcUrl(container: MySQLContainer<*>): String =
             container.jdbcUrl + "?allowMultiQueries=true&useSSL=false&allowPublicKeyRetrieval=true"
 
+        /**
+         * 在容器上执行类路径中的迁移脚本
+         *
+         * @param container 已启动的 MySQL 测试容器
+         * @param resource 类路径下的迁移脚本路径
+         */
         private fun executeMigration(container: MySQLContainer<*>, resource: String) {
             val sql = javaClass.getResourceAsStream(resource)!!.bufferedReader().readText()
             DriverManager.getConnection(jdbcUrl(container), container.username, container.password).use { connection ->

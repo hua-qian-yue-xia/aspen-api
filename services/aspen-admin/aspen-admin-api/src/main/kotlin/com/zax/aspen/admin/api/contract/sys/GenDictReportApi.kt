@@ -1,4 +1,4 @@
-package com.zax.aspen.admin.api.gen
+package com.zax.aspen.admin.api.contract.sys
 
 import com.zax.aspen.common.core.gen.GenDictDescriptor
 import org.springframework.web.bind.annotation.PostMapping
@@ -11,7 +11,11 @@ import org.springframework.web.bind.annotation.RequestBody
  * sys_dict_item; 属于 internal 契约, 不经网关暴露, v1 无鉴权, 依赖默认关闭与网络隔离兜底
  */
 interface GenDictReportApi {
-    /** 接收上报方的字典目录并按配置模式幂等播种 */
+    /**
+     * 接收上报方的字典目录并按配置模式幂等播种
+     *
+     * @param descriptors 上报方扫描 @GenDict 注解得到的字典描述列表, 每项对应一个枚举字典
+     */
     @PostMapping(PATH)
     fun reportDicts(
         @RequestBody descriptors: List<GenDictDescriptor>,

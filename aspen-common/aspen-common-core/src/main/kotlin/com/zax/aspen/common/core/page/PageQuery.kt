@@ -1,6 +1,8 @@
 package com.zax.aspen.common.core.page
 
-/** 定义不依赖分页框架且从 1 开始计数的分页请求 */
+/**
+ * 定义不依赖分页框架且从 1 开始计数的分页请求
+ */
 data class PageQuery(
     /** 从 1 开始的目标页码 */
     val pageNumber: Int = DEFAULT_PAGE_NUMBER,
@@ -17,7 +19,9 @@ data class PageQuery(
     val offset: Long
         get() = Math.multiplyExact((pageNumber - 1).toLong(), pageSize.toLong())
 
-    /** 保存分页请求的公共默认值 */
+    /**
+     * 保存分页请求的公共默认值
+     */
     companion object {
         /** 默认从第 1 页开始 */
         const val DEFAULT_PAGE_NUMBER: Int = 1

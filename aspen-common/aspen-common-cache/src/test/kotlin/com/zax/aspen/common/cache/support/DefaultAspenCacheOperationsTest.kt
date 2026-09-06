@@ -19,7 +19,9 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** 验证显式缓存操作不会吞掉 Redis 基础设施故障 */
+/**
+ * 验证显式缓存操作不会吞掉 Redis 基础设施故障
+ */
 class DefaultAspenCacheOperationsTest {
     /** 验证 Redis 读取失败会转换为统一异常且不会伪造缓存命中 */
     @Test
@@ -123,17 +125,29 @@ class DefaultAspenCacheOperationsTest {
         assertTrue(operations.contains("upm-user", CacheKey("upm", "user", "42")))
     }
 
-    /** 创建使用受控泛型签名的 RedisTemplate 测试替身 */
+    /**
+     * 创建使用受控泛型签名的 RedisTemplate 测试替身
+     *
+     * @return mock 自 RedisTemplate 并强转为受控泛型签名的模板
+     */
     @Suppress("UNCHECKED_CAST")
     private fun redisTemplate(): RedisTemplate<String, Any> =
         mock(RedisTemplate::class.java) as RedisTemplate<String, Any>
 
-    /** 创建使用受控泛型签名的 ValueOperations 测试替身 */
+    /**
+     * 创建使用受控泛型签名的 ValueOperations 测试替身
+     *
+     * @return mock 自 ValueOperations 并强转为受控泛型签名的操作视图
+     */
     @Suppress("UNCHECKED_CAST")
     private fun valueOperations(): ValueOperations<String, Any> =
         mock(ValueOperations::class.java) as ValueOperations<String, Any>
 
-    /** 创建与测试 Key 命名空间一致的合法缓存设置 */
+    /**
+     * 创建与测试 Key 命名空间一致的合法缓存设置
+     *
+     * @return 由 test 部署标识, admin 服务名和 upm-user 定义构建的 CacheSettings
+     */
     private fun settings(): CacheSettings {
         val properties = AspenCacheProperties().apply {
             environment = "test"

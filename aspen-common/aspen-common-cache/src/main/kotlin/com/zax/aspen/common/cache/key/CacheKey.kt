@@ -19,7 +19,13 @@ data class CacheKey(
         }
     }
 
-    /** 支持使用可变参数快速创建缓存 Key */
+    /**
+     * 支持使用可变参数快速创建缓存 Key
+     *
+     * @param group 所属的服务内业务组
+     * @param domain 所属的业务领域
+     * @param identifiers 唯一定位缓存对象的一个或多个标识
+     */
     constructor(group: String, domain: String, vararg identifiers: String) :
         this(group, domain, identifiers.toList())
 
@@ -35,7 +41,14 @@ internal object CacheKeyRules {
     /** 允许在 Key 段中使用的字符集合 */
     private val segmentPattern = Regex("[A-Za-z0-9][A-Za-z0-9._-]*")
 
-    /** 校验单个 Key 段并返回原值 */
+    /**
+     * 校验单个 Key 段并返回原值
+     *
+     * @param value 待校验的 Key 段内容
+     * @param fieldName 校验失败时用于错误提示的字段名
+     * @param maxLength 该段允许的最大字符长度
+     * @return 校验通过的原始值
+     */
     fun requireSegment(value: String, fieldName: String, maxLength: Int = 64): String {
         require(value.length <= maxLength) { "$fieldName 长度不能超过 $maxLength 个字符" }
         require(segmentPattern.matches(value)) {

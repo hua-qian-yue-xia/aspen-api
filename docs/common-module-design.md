@@ -26,7 +26,7 @@ aspen-common-gen      -> aspen-common-core
 
 `core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。
 
-源码注释遵守项目统一规范：注释正文使用中文，专有名称保留原文，标点使用英文字符，句尾不加句号。类、接口、枚举、对象、字段和方法必须有说明职责或约束的有效 KDoc，重要实现边界补充行注释。数据库实体和字段的 KDoc 必须详尽：类级注释说明职责与典型使用场景，字段有具体使用场景、取值约定、生命周期或对其他流程的影响时必须逐一写清楚，仅列名自解释且无附加语义的简单字段可不写字段注释。Jimmer 实体列名与属性名蛇形一致时不声明 `@Column`，由 Jimmer 自动解析，该规则由架构测试强制检查。完整规则和示例见《技术架构》7.8 节。
+源码注释遵守项目统一规范：注释正文使用中文，专有名称保留原文，标点使用英文字符，句尾不加句号。类、接口、枚举、对象、字段和方法必须有说明职责或约束的有效 KDoc，重要实现边界补充行注释。方法 KDoc 必须采用完整块格式（概述段 + 空行 + 每个参数的 `@param` + 非 `Unit` 返回的 `@return`），禁止只有单行概述的方法注释；该规则由根模块 KDoc 纪律测试强制。数据库实体和字段的 KDoc 必须详尽：类级注释说明职责与典型使用场景，字段有具体使用场景、取值约定、生命周期或对其他流程的影响时必须逐一写清楚，仅列名自解释且无附加语义的简单字段可不写字段注释。Jimmer 实体列名与属性名蛇形一致时不声明 `@Column`，由 Jimmer 自动解析，该规则由架构测试强制检查。完整规则和示例见《技术架构》7.8 节。
 
 ## 2. 与 pjcloud-common 的取舍
 
@@ -128,7 +128,7 @@ SQL 日志、Dialect、Schema 验证和 JDBC 超时继续使用 `jimmer.*` 原�
 
 ## 5. Cache
 
-包根为 `com.zax.aspen.common.cache`。公共缓存模块提供严格 Key、显式 TTL、受控 JSON 序列化、`RedisCacheManager` 和 `AspenCacheOperations`。业务代码不直接操作 `RedisTemplate`，服务内的 `cache/redis` 封装组合这些基础操作并决定回源和失败策略。
+包根为 `com.zax.aspen.common.cache`。公共缓存模块提供严格 Key、显式 TTL、受控 JSON 序列化、`RedisCacheManager`、`AspenCacheOperations` 和非缓存语义的 `AspenRedisOperations` 分发原语。业务代码不直接操作 `RedisTemplate`，也不自行声明 Redis 客户端依赖；服务内的 `cache/redis` 封装组合这些基础操作并决定回源和失败策略。
 
 ```yaml
 aspen:
@@ -171,10 +171,17 @@ aspen:{environment}:{service}:{group}:{domain}:{identifier...}
 Spring Cache 的 `RedisCacheManager` 会自动创建，但 common-cache 不启用 `@EnableCaching`。使用注解缓存的服务必须在自身配置中显式开启。需要明确失败路径的业务代码优先使用：
 
 ```kotlin
-val key = CacheKey("upm", "user", "42")
+val key = AdminCacheKeys.user(userId)
 cacheOperations.put("upm-user", key, userView)
 val cached = cacheOperations.get<UserView>("upm-user", key)
 ```
+
+服务内键工厂是 `CacheKey` 的唯一合法构造入口。每个服务 biz 的 `cache/` 包提供唯一工厂对象 `<Service>CacheKeys`（Admin 为 `AdminCacheKeys`），规则如下：
+
+- 调用点只能调用工厂函数构造 `CacheKey`，禁止手写 `CacheKey(...)`、group/domain 字面量和业务 ID 到 Key 段的 `toString()` 拼接；转换逻辑收在工厂内。
+- 工厂函数与缓存 domain 一一对应，参数只接收业务标识（如 `userId: Long`）；复合键的段顺序属于调用契约，由工厂函数签名固化，调用方不得自行调换。
+- 条目不预置：新工厂函数与配置中心对应 Cache 声明的 `group`/`domain`/`ttl`、第一个真实消费方同时落地，禁止为将来可能缓存的对象预留条目。
+- 工厂与配置声明中的 group/domain 属于双处声明，运行时由 `CacheSettings.definition` 的一致性校验兜底；仓库内由根模块中央边界测试 `CacheKeyFactoryBoundaryTest` 强制工厂之外不出现裸构造，键工厂文件必须位于服务 `cache/` 包。
 
 `AspenCacheOperations` 第一版提供以下受控操作：
 
@@ -203,7 +210,23 @@ val cached = cacheOperations.get<UserView>("upm-user", key)
 
 缓存 TTL 和命名空间在应用启动时绑定。Nacos 修改后通过滚动重启生效，第一版不动态替换运行中的 CacheManager，避免同一集群实例使用不同 TTL。
 
-common-cache 第一版不包含分布式锁、幂等、限流、Redis Pub/Sub 或任务锁。可靠业务事件使用 RocketMQ；锁和幂等在明确一致性、超时、失败与恢复语义后建立独立模块。
+`AspenRedisOperations` 提供非缓存语义的受控分发原语，与 `AspenCacheOperations` 并列：
+
+| 操作 | 语义 | 典型用途 |
+| --- | --- | --- |
+| `increment(key)` | INCR 原子自增并返回新值 | 单调递增版本号 |
+| `getValue(key)` | 读取永久键的字符串值 | 读取权威数据的分发快照 |
+| `setValue(key, value)` | 无 TTL 整键原子替换（一条 SET，无删除窗口） | 发布全量版本化快照 |
+| `publish(channel, message)` | 发布通知消息 | 变更到达通知 |
+| `subscribe(channel, handler)` | 注册字符串消息处理器（内部共享订阅容器） | 消费变更通知 |
+
+使用边界：
+
+- 只用于「缓存语义不适用」的场景：权威数据在数据库、Redis 只是可随时全量重建的分发介质，或单调计数与轻量变更通知；每个使用场景必须在本节登记，首个登记场景为网关路由快照分发（Admin 发布、Gateway 只读消费，Key 与频道由 admin-api 的 `constant` 契约定义）。
+- Key 不经过 `CacheKeyBuilder` 命名空间（跨服务共享键含 service 段无法对齐），由使用方契约常量统一定义并自行校验格式；缓存语义的数据仍必须走 `AspenCacheOperations`，禁止用本原语绕过 TTL 治理。
+- `subscribe` 不提供可靠投递、重放或死信，断线期间的变更由使用方定义的自愈路径兜底（路由场景为下次变更或重启重发布）；可靠业务事件继续使用 RocketMQ。
+
+common-cache 第一版不包含分布式锁、幂等、限流或任务锁。可靠业务事件使用 RocketMQ；锁和幂等在明确一致性、超时、失败与恢复语义后建立独立模块。
 
 ## 6. Gen
 

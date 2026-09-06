@@ -12,6 +12,7 @@ Aspen 是一套微服务基础设施项目，提供公共基础模块（core / d
 | `aspen-common-cache` | Redis 缓存操作封装 |
 | `aspen-admin-api` | Admin 服务对外契约（普通 JAR） |
 | `aspen-admin-biz` | Admin 服务唯一可运行模块 |
+| `aspen-gateway` | 唯一外部入口网关，从 Redis 加载动态路由（表归 Admin sys 组） |
 
 ## 构建
 

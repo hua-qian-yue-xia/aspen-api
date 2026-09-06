@@ -1,0 +1,2 @@
+# Aspen Gateway 本地环境配置 (dataId: aspen-gateway-local.yaml, Group: DEFAULT_GROUP)
+# 占位文件; Gateway 接入配置中心时在此填充网关私有配置, 公共配置走 aspen-common-local.yaml

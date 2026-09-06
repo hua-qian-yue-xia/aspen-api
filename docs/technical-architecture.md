@@ -49,7 +49,7 @@ Gateway 是边缘入口，不机械拆分为 `api` 与 `biz`；公共模块是�
 | 缓存 | 已实现 common-cache 的 Key、TTL、序列化、条件写入和原子读取删除 | Redis |
 | 消息 | Gradle 已配置 RocketMQ Binder，功能尚未实现 | RocketMQ |
 | 数据访问 | Admin UPM 已接入 Jimmer、KSP、MySQL，并建立 24 个实体和初始迁移，尚无 Repository | Jimmer 是唯一 ORM，Kotlin DSL + KSP |
-| 部署 | 尚无 Docker 部署文件 | 自有机房 Docker，业务服务多实例，Nacos 明确单节点 |
+| 部署 | 开发环境已有 Nacos 配置中心 compose（MySQL 持久化 + 鉴权 + 配置种子），admin-biz 已接配置中心导入；业务服务镜像与生产拓扑未建，见《开发环境部署》 | 自有机房 Docker，业务服务多实例，Nacos 明确单节点 |
 | 可诊断性 | 默认日志和上下文加载测试 | 健康检查、结构化日志、Trace ID、事件 ID；监控平台后置 |
 
 当前根源码包含 `AspenApplication.kt`、`application.yaml` 和上下文加载测试；Admin 已创建 `aspen-admin-api`、`aspen-admin-biz` 和唯一 Biz 启动类，UPM 已落地 Jimmer Entity 与 MySQL 初始迁移，尚无 Controller、Service、Repository 或业务契约实现。其余目标模块尚未创建，以下内容仍是后续代码和部署必须遵循的架构基线。
@@ -293,7 +293,7 @@ aspen/
     │   ├── client/
     │   │   └── {group}/                # 业务组供消费方使用的 OpenFeign Client
     │   ├── event/
-    │   │   └── {group}/payload/        # 业务组版本化事件及其业务 Payload
+    │   │   └── {group}/                # 业务组跨服务异步分发契约：事件负载与存储分发快照
     │   ├── task/
     │   │   └── {group}/                # 可选：业务组统一任务服务投递的命令契约
     │   ├── enums/
@@ -304,10 +304,12 @@ aspen/
     │   │   └── {group}/                # 业务组契约级校验注解，不含业务查询
     │   └── constant/                   # 少量稳定协议常量，禁止业务配置
     └── test/kotlin/com/zax/aspen/<service>/api/
+        ├── architecture/
+        │   └── ApiPackageStructureTest.kt  # 契约类型目录在前、业务组在后 的布局强制测试
         ├── contract/
         │   └── {group}/                # 业务组 HTTP/Feign 契约一致性测试
         ├── serialization/
-        │   └── {group}/                # 业务组 DTO、VO、事件序列化兼容测试
+        │   └── {group}/                # 业务组 DTO、VO、事件与快照序列化兼容测试
         └── validation/
             └── {group}/                # 业务组 DTO 入参校验测试
 ```
@@ -322,20 +324,21 @@ aspen/
 | `dto` | 写请求、查询条件、分页条件等入参，使用 Bean Validation 描述协议校验 | Entity、Repository 查询结果、返回视图、SQL/Jimmer 表达式 |
 | `vo` | 对外返回的详情、摘要、列表项和分页结果 | Jimmer Entity、Projection、懒加载对象 |
 | `client` | `@FeignClient` 接口和稳定的 client 标识 | 超时配置、拦截器实现、fallback 实现、调用编排 |
-| `event` | 生产方拥有的事件类型、版本和 Payload | Producer、Consumer、Outbox、重试实现 |
+| `event` | 生产方拥有的跨服务异步分发契约：事件类型、版本、Payload 与共享存储介质分发的版本化快照 | Producer、Consumer、Outbox、重试实现 |
 | `task` | 目标业务服务拥有的 `*TaskCommand` 及版本 | Quartz Job、调度配置、Consumer 实现 |
 | `enums` | 协议长期需要的公开枚举 | 只服务于内部状态机的枚举 |
 | `error` | 稳定错误码、错误分类和弃用信息 | 异常堆栈、内部异常实现 |
 | `validation` | 无数据库访问的纯校验注解与 Validator | 注入 Service/Repository 的业务存在性校验 |
 | `constant` | API 版本、Header、Media Type 等稳定协议常量 | 可变业务规则、环境地址、Topic 配置和密钥 |
 
-### 7.4 DTO、VO 与事件规范
+### 7.4 DTO、VO、事件与快照规范
 
 本项目固定以下术语，不允许由各服务自行解释：
 
 - **DTO**：Data Transfer Object，只表示进入服务边界的传输数据，统一放在 `api/dto`。
 - **VO**：View Object，只表示离开服务边界的响应视图，统一放在 `api/vo`。
-- **Event/Payload**：跨服务异步事实，统一放在生产方 `api/event`，不能复用 DTO 或 VO。
+- **Event/Payload**：经消息介质分发的跨服务异步事实，统一放在生产方 `api/event`，不能复用 DTO 或 VO。
+- **Snapshot**：经共享存储介质（如 Redis）向其他运行时分发的版本化状态契约，统一放在生产方 `api/event`，同样不能复用 DTO 或 VO；构成快照结构的部件类型随快照归档在同一包。
 - **Task Command**：调度系统请求业务服务执行的幂等命令，统一放在目标业务服务 `api/task`，不能伪装成过去式事件。
 - **Entity/Projection**：Jimmer 数据库模型和查询投影，只放在 `biz`，不能进入 `api`。
 
@@ -345,13 +348,14 @@ aspen/
 2. 查询入参使用 `*QueryDTO`，例如 `UserDetailQueryDTO`、`UserPageQueryDTO`。
 3. 出参使用 `*VO`，例如 `UserDetailVO`、`UserSummaryVO`、`UserPageVO`。
 4. 业务事件使用过去式事实命名并以 `Event` 结尾，例如 `UserCreatedEvent`；事件负载以 `Payload` 结尾。
-5. 任务命令使用祈使业务语义并以 `TaskCommand` 结尾，例如 `CloseExpiredOrdersTaskCommand`。
-6. Feign 接口以 `FeignClient` 结尾，并设置全局唯一的 `contextId`；HTTP 契约接口以 `Api` 结尾。
-7. DTO、VO、Payload 和 Task Command 默认使用不可变 Kotlin `data class` 与 `val`，禁止包含行为、Spring Bean、Entity 引用和延迟加载属性。
-8. Bean Validation 只放在输入 DTO；VO 不使用输入校验注解，需要访问数据库或外部服务的业务校验由 `biz/service` 完成。
-9. 禁止在公开契约中使用 `Any`、`Map<String, Any>`、框架分页对象、Jimmer 类型、`ResponseEntity` 或内部异常类型。
-10. API 字段新增必须提供兼容默认行为；字段删除、改名、改类型和枚举值语义变化属于破坏性变更。
-11. API 层只能表达协议级校验；用户名是否存在、库存是否充足等需要访问数据的校验必须进入 `biz`。
+5. 共享存储介质分发的版本化快照以 `Snapshot` 结尾，例如 `RouteCatalogSnapshot`；快照的结构部件类型（如断言、过滤器定义）随快照放在 `api/event`。入参、出参与 Entity 的 `@Serialized` 列确需与分发面保持结构一致时，可直接引用这些部件类型，但必须在各自 KDoc 中声明该一致性约定。
+6. 任务命令使用祈使业务语义并以 `TaskCommand` 结尾，例如 `CloseExpiredOrdersTaskCommand`。
+7. Feign 接口以 `FeignClient` 结尾，并设置全局唯一的 `contextId`；HTTP 契约接口以 `Api` 结尾。
+8. DTO、VO、Payload、Snapshot 和 Task Command 默认使用不可变 Kotlin `data class` 与 `val`，禁止包含行为、Spring Bean、Entity 引用和延迟加载属性。
+9. Bean Validation 只放在输入 DTO；VO 不使用输入校验注解，需要访问数据库或外部服务的业务校验由 `biz/service` 完成。
+10. 禁止在公开契约中使用 `Any`、`Map<String, Any>`、框架分页对象、Jimmer 类型、`ResponseEntity` 或内部异常类型。
+11. API 字段新增必须提供兼容默认行为；字段删除、改名、改类型和枚举值语义变化属于破坏性变更。
+12. API 层只能表达协议级校验；用户名是否存在、库存是否充足等需要访问数据的校验必须进入 `biz`。
 
 ### 7.5 `biz` 强制目录规范
 
@@ -364,7 +368,7 @@ aspen/
     ├── main/
     │   ├── kotlin/com/zax/aspen/<service>/biz/
     │   │   ├── bootstrap/                       # Spring Boot Application 启动类
-    │   │   ├── config/                          # Spring、中间件和类型安全配置
+    │   │   ├── config/                          # Spring、中间件装配与 @ConfigurationProperties 类型安全配置属性
     │   │   ├── controller/
     │   │   │   └── advice/                     # 本服务特有的协议异常处理
     │   │   ├── service/
@@ -377,7 +381,8 @@ aspen/
     │   │   ├── client/feign/
     │   │   │   ├── configuration/              # Feign 客户端运行配置
     │   │   │   └── fallback/                   # Sentinel/Feign 降级实现
-    │   │   ├── cache/redis/                     # Redis Cache、Key 和序列化
+    │   │   ├── cache/                           # <Service>CacheKeys 键工厂，CacheKey 的唯一构造入口
+    │   │   ├── cache/redis/                     # Redis Cache 封装、回源与失败策略
     │   │   ├── messaging/rocketmq/
     │   │   │   ├── producer/                   # 业务事件发布
     │   │   │   ├── consumer/                   # 消费入口与幂等处理
@@ -438,10 +443,16 @@ RocketMQ Consumer -> Service
 | Feign 降级工厂 | `FallbackFactory` | `UserFeignFallbackFactory` |
 | Redis 缓存封装 | `Cache` | `UserCache` |
 | MQ 生产/消费 | `Producer` / `Consumer` | `UserEventProducer`、`UserCreatedConsumer` |
+| 共享存储分发 | `Publisher` | `RouteDefinitionPublisher` |
+| 启动期业务编排 | `StartupRunner` | `RoutePublishStartupRunner` |
+| 进程内领域事件 | `Event` | `SysRouteChangedEvent` |
+| SPI 承接与播种 | `Seeder` | `GenDictSeeder` |
 | Spring 配置 | `Configuration` | `UserFeignConfiguration` |
 | 类型安全配置属性 | `Properties` | `UserCacheProperties` |
 
 只有实际定义了 `UserService` 接口时才能创建 `UserServiceImpl`；如果没有多实现、替换或独立接口的需要，直接使用具体的 `UserService`，禁止为了形式创建一对空接口和唯一实现。禁止使用缺少职责语义的 `CommonManager`、`DataHandler`、`BizUtils` 等名称。
+
+共享存储分发执行件（`*Publisher`）、启动期执行的业务编排（`*StartupRunner`）、进程内领域事件（如 `SysRouteChangedEvent`）与公共模块 SPI 的承接实现（`*Seeder`）都是业务编排的组成部分，与所属业务组的 Service 同包放在 `service/{group}`；`bootstrap` 与 `config` 禁止承载业务流程（见 7.6 约束 13）。进程内事件只在进程内触发协作，不进入 `api/event`，后者只承载跨服务分发契约。业务组归属的类型安全配置属性（`*Properties`）放在 `config/{group}`，跨组的全局装配留在 `config` 根。
 
 ### 7.8 源码与可见性规则
 
@@ -449,15 +460,28 @@ RocketMQ Consumer -> Service
 2. 源文件按类型分级组织：Jimmer 模型类型（`@Entity`、`@MappedSuperclass`、`@Embeddable`、`@Immutable`）每个文件只能声明一个且文件名与类型名一致，这是 KSP 的编译期硬约束；被其他文件引用的 `public` 顶层类型各自独占同名文件以保证按类型名可定位，`sealed` 类型及其直接子类型允许放在以 sealed 根命名的同一文件；`private`/`internal` 辅助类型、`typealias` 与主题内聚的顶层函数、扩展函数可以按 Kotlin 官方约定同文件共存，多声明文件以内容命名并控制在数百行以内；禁止把多个无关公开类型堆入 `Utils.kt`、`Models.kt` 之类的收容文件。
 3. `api` 中的契约类型必须是公开类型；`biz` 类型默认使用最小可见性，只有 Spring、Jimmer KSP、序列化或跨包协作确实需要时才扩大可见性。
 4. `biz` 包根目录不直接堆放业务类，除规定的一级目录外不得自行扩展新的技术层。
-5. Spring Bean 统一使用构造器注入和只读 `val`，禁止字段注入、`lateinit` 注入和静态 Service Locator。
+5. 依赖注入统一使用 `@Resource` 字段注入：Spring 组件类（`@Service`、`@Component`、`@Repository`、`@RestController` 等）的协作依赖以 `@Resource` 标注的 `private lateinit var` 字段声明，禁止构造器注入、`@Autowired` 和静态 Service Locator，该规则由根模块的注入边界测试强制检查；公共模块经 `@Bean` 工厂方法装配的基础设施类（拦截器、分发原语、启动编排等）与 `@Bean` 工厂方法本身保持工厂参数注入，不适用注解注入；`@ConfigurationProperties` 绑定类的构造参数属于配置绑定，不是依赖注入。单测替身经 `ReflectionTestUtils.setField` 填充注入字段。
 6. 单个类只承担一个层级职责；同时带有 Controller、事务编排、Jimmer 查询或 MQ 消费职责的类必须拆分。
 7. 配置属性使用类型安全的 `@ConfigurationProperties` 并在启动时校验，禁止业务代码直接散读字符串配置键。
 8. 公共扩展函数按明确业务或框架适配归档，禁止建立全局 `Extensions.kt` 或 `Utils.kt` 收容无关方法。
 9. 测试包镜像生产包结构，测试夹具放在测试源码集，禁止为测试方便扩大生产类可见性。
 10. 生成代码只来自 Jimmer KSP 等受控生成器，生成目录不提交手工修改，也不在生成代码中放业务逻辑。
 11. 源码注释正文统一使用中文，框架名、类型名和配置键等专有名称保留原文；注释中的逗号、冒号、分号和括号等标点统一使用英文字符，注释句尾不使用句号。
-12. 类、接口、枚举、对象、字段和方法必须使用 KDoc 说明职责、约束或失败语义；重要配置、兼容处理和安全边界使用行注释说明原因。
+12. 类、接口、枚举、对象、字段和方法必须使用 KDoc 说明职责、约束或失败语义；重要配置、兼容处理和安全边界使用行注释说明原因。方法 KDoc 必须采用完整块格式：概述段说明职责与使用场景（可多行），空一行后逐一标注 `@param`（每个值参数都必须有，描述取值含义、格式或约束，不是把参数名翻译成中文）与 `@return`（返回类型非 `Unit` 的所有方法，说明返回值语义与空值条件，空值用 `` `null` `` 标记），需要调用方显式处理的失败用 `@throws` 标注；`override` 方法行为与契约一致时省略 KDoc（契约文档是唯一权威），存在附加行为或差异时必须写完整块 KDoc 说明差异；字段、属性与常量允许单行 KDoc。禁止只有单行概述的方法注释。该规则由根模块的 KDoc 纪律测试强制检查。
 13. 注释必须解释职责或设计约束，禁止仅把类名、字段名或方法名翻译成中文形成无信息量注释。
+
+方法 KDoc 示例：
+
+```kotlin
+/**
+ * 在当前管理用户数据范围内查询指定商户配置
+ *
+ * @param mchId 商户 ID
+ * @param orderType 硬件订单类型编码
+ * @return 匹配配置, 未配置时返回 `null`
+ */
+fun getForManagement(mchId: Long, orderType: String): MchAutoRefundConfigVo?
+```
 14. Jimmer 实体列名与属性名蛇形一致时不声明 `@Column`，由 Jimmer 自动解析；仅列名与约定不一致时才显式声明 `@Column(name = "...")`，该规则由架构测试强制检查。
 15. 数据库实体和字段的 KDoc 必须详尽：类级注释说明职责与典型使用场景；字段有具体使用场景、取值约定、生命周期或对其他流程的影响时必须逐一写清楚，例如「字典编码, 业务代码以其定位字典, 租户内唯一, 创建后不可修改」；仅列名自解释且无附加语义的简单字段可不写字段注释。
 16. 机器错误码、配置键、协议字段名和 Bean 名使用稳定英文；默认错误消息以及允许返回给调用方的 `BusinessException.detail` 必须使用中文。
@@ -521,8 +545,8 @@ aspen-admin-api/
     │   │   ├── upm/                   # UPM Feign Client
     │   │   └── sys/                   # Sys Feign Client
     │   ├── event/
-    │   │   ├── upm/payload/           # UPM 对外业务事件
-    │   │   └── sys/payload/           # Sys 对外业务事件
+    │   │   ├── upm/                   # 可选：UPM 跨服务异步分发契约
+    │   │   └── sys/                   # Sys 跨服务异步分发契约：网关路由快照等
     │   ├── task/
     │   │   ├── upm/                   # 可选：UPM 任务命令契约
     │   │   └── sys/                   # 可选：Sys 任务命令契约
@@ -548,7 +572,7 @@ aspen-admin-api/
             └── sys/
 ```
 
-`task` 目录只存放由目标业务组拥有的 `*TaskCommand`，不包含 Quartz、Job 或调度配置；没有任务命令时不创建。`event` 与 `task` 不能互相替代：Event 表示已经发生的事实，Task Command 表示请求业务服务执行动作。Admin 各契约类型目录内禁止出现未归入 `upm/sys` 业务组的业务契约。
+`task` 目录只存放由目标业务组拥有的 `*TaskCommand`，不包含 Quartz、Job 或调度配置；没有任务命令时不创建。`event` 与 `task` 不能互相替代：Event 表示已经发生的事实，Snapshot 表示经共享存储介质分发的版本化状态，Task Command 表示请求业务服务执行动作。Admin 各契约类型目录内禁止出现未归入 `upm/sys` 业务组的业务契约。
 
 #### 7.10.2 Admin Biz 目录
 
@@ -560,7 +584,9 @@ aspen-admin-biz/
     ├── main/
     │   ├── kotlin/com/zax/aspen/admin/biz/
     │   │   ├── bootstrap/               # Admin 启动类
-    │   │   ├── config/                  # Admin 全局装配，不放业务逻辑
+    │   │   ├── config/                  # Admin 全局装配，不放业务流程
+    │   │   │   ├── upm/                 # 可选：UPM 归属的类型安全配置属性
+    │   │   │   └── sys/                 # Sys 归属的类型安全配置属性，如 RoutePublishProperties
     │   │   ├── controller/
     │   │   │   ├── upm/
     │   │   │   └── sys/
@@ -585,9 +611,10 @@ aspen-admin-biz/
     │   │   ├── client/feign/
     │   │   │   ├── upm/
     │   │   │   └── sys/
-    │   │   ├── cache/redis/
-    │   │   │   ├── upm/
-    │   │   │   └── sys/
+    │   │   ├── cache/                   # AdminCacheKeys 键工厂
+    │   │   │   └── redis/
+    │   │   │       ├── upm/
+    │   │   │       └── sys/
     │   │   └── messaging/rocketmq/
     │   │       ├── upm/
     │   │       └── sys/
@@ -598,6 +625,7 @@ aspen-admin-biz/
     │       │   └── sys/
     │       └── logback-spring.xml
     └── test/kotlin/com/zax/aspen/admin/biz/
+        ├── bootstrap/                  # 启动类冒烟测试
         ├── controller/
         │   ├── upm/
         │   └── sys/
@@ -729,6 +757,7 @@ flowchart LR
 | `api -> Jimmer/Redis/RocketMQ 运行实现` | 禁止 | 防止对外契约绑定内部基础设施 |
 | `service-a-api -> service-b-api -> service-a-api` | 禁止 | 防止契约环和无法独立发布 |
 | `gateway -> service-biz` | 禁止 | Gateway 根据协议路由，不链接业务实现 |
+| `gateway -> aspen-admin-api` | 受限允许 | 仅消费路由契约的纯数据模型与 Redis Key 约定，不链接 Admin 实现 |
 
 如果两个 `api` 需要相同类型，先判断它是否真的是跨服务稳定概念；首版只有通用错误码、业务异常、分页和纯数据校验可下沉到 `aspen-common-core`。ID、时间上下文和具体业务类型不能只为消除重复而进入公共核心。
 
@@ -830,7 +859,7 @@ payload
 | 组件 | 主要落点 | 架构要求 |
 | --- | --- | --- |
 | Nacos | Gateway、各 `biz`、部署层 | 服务注册、外部配置、Sentinel 规则；首期仅单节点 |
-| Gateway | `aspen-gateway` | 唯一外部入口，不承载业务编排或数据库访问 |
+| Gateway | `aspen-gateway` | 唯一外部入口；动态路由经 Admin `sys_route` 权威定义与 Redis 分发，不承载业务编排或数据库访问 |
 | Sentinel | Gateway、各 `biz`、`aspen-common-sentinel` | 网关限流、服务保护、Feign 熔断，规则持久化到 Nacos |
 | OpenFeign | Client 在提供方 `api`，运行配置与调用在消费方 `biz` | 统一超时、身份、Trace ID、错误解码 |
 | Spring Security | Gateway、`aspen-auth-biz`、`aspen-common-security` | 集中实现认证；业务进程只接入公共最小身份防线 |
@@ -898,6 +927,16 @@ Admin UPM 的字段和表设计见《[Admin UPM 数据模型](./admin-upm-data-m
 - 是/否语义使用 Kotlin `Boolean`, 不定义 YesNo 类枚举。
 - 实体状态字段从 String 切换为枚举时, 数据库列值必须与 code 完全一致, 切换前后数据零迁移。Jimmer `@Default` 字面量按枚举 `name` 而非 code 解析（如 `@Default("ENABLED")` 对应 `EnabledStatus.ENABLED`）, 持久化写出时仍经标量转换器落为小写 code。
 - 枚举需要前端下拉渲染或值翻译展示时, 以 `@GenDict(code, name, group)` 声明字典镜像, 由 common-gen 扫描并幂等播种进 `sys_dict`/`sys_dict_item` (`is_built_in=true`), 播种规则、模式与开关见《Admin SYS 数据模型》; 枚举仍是唯一权威取值来源, 生成字典的项禁止运营增删值; 注解与目录模型位于 common-core `gen` 包, 保持框架无关。
+
+### 12.5 JSON 列映射
+
+业务表确需以 JSON 列保存结构化数据时（如 `sys_route` 的断言与过滤器）, 映射与读写遵守以下约定:
+
+- 实体属性一律声明为类型化的集合或映射（如 `List<RouteDefinitionPart>`、`Map<String, String>`）, 标注 Jimmer `@Serialized` 由 ORM 与 JSON 列直接互转; 禁止实体列用 `String` 承载 JSON 文本、再由 Service 或 Repository 手工序列化与解析, 保持 Kotlin 代码层面不出现来回 JSON 转换。
+- JSON 结构必须有对应的数据模型类并进入最合适的契约位置（跨服务消费放提供方 `api`, 纯内部放 `biz`）, 结构合法性由模型构造校验兜底, 写库前校验、读库时自然还原为类型安全数据。
+- JSON 列必须按业务语义命名专用列（如 `predicates`、`filters`、`metadata`）, 不使用通用 `extension` 兜底列; 需要结构演进时定义新的具名列, 而不是往一个万能 JSON 里继续塞字段。
+- 列内 JSON 结构损坏属于数据完整性事故, 在行映射阶段整体失败并告警（fail-fast）; 结构合法但语义非法的行（如缺断言）由消费方按行跳过并告警。首例实现见《Admin SYS 数据模型》`sys_route`。
+- Jimmer `@Serialized` 默认走 Jackson 3 mapper; Kotlin 数据类的反序列化依赖 jackson-module-kotlin, 已随 Jackson 3 的 ServiceLoader 自动注册, 极端场景可用 Jimmer 的 `JsonCodecCustomization` 注入定制 mapper。
 
 ## 13. Nacos 单节点与配置架构
 
@@ -1051,10 +1090,10 @@ Quartz Cluster 只能协调“哪个调度实例获得 Trigger”，不能承诺
 ### 14.4 Redis
 
 - Key 使用 `aspen:{env}:{service}:{group}:{domain}:{id...}` 结构，并为每类 Key 显式定义 TTL。
-- 业务代码通过 `AspenCacheOperations` 使用确定 Key 的读写、条件写入、原子读取删除、存在性检查和删除，不直接依赖 `RedisTemplate`。
+- Redis 访问一律经 common-cache 的受控操作类，业务模块禁止直接注入 `RedisTemplate`/`StringRedisTemplate`，也禁止自行声明 `spring-boot-starter-data-redis` 依赖；该 starter 只能由 common-cache 声明并由其隐藏 Redis 客户端类型。缓存语义（确定 Key 的读写、条件写入、原子读取删除、存在性检查和删除）使用 `AspenCacheOperations`；缓存语义不适用的场景（权威数据分发、单调计数器、变更通知）使用 `AspenRedisOperations` 分发原语，使用场景必须先在《Common 模块设计》登记。跨服务共享的 Key 与频道命名由提供方 `api` 的 `constant` 契约统一定义，双方引用同一常量。
 - 条件写入必须使用 Redis 原子 `NX/XX` 语义，调用方不能用先查询再写入代替；一次性数据必须使用原子 `GETDEL`，不能用先读取再删除代替。
 - `GETDEL` 要求 Redis `6.2+`，Docker 部署必须固定经过验证的补丁版本，禁止使用浮动镜像标签。
-- 禁止公共接口提供 `flushdb`、通配符删除、永久化 Key 或业务链路 `SCAN`；集合操作必须先定义容量上限和游标协议。
+- 缓存接口禁止提供 `flushdb`、通配符删除或业务链路 `SCAN`；永久化 Key 只允许出现在 `AspenRedisOperations` 分发原语中，且仅限「权威数据在数据库、Redis 只是可随时全量重建的分发介质」的场景并要求文档登记；集合操作必须先定义容量上限和游标协议。
 - 禁止 Java 原生序列化、大对象、无界集合和业务链路全量扫描 Key。
 - 缓存不是权威数据，必须定义未命中、穿透、击穿、雪崩和 Redis 故障时的行为。
 - 分布式锁必须有所有者、租约、等待上限和失败路径，不能代替数据库事务。
@@ -1131,6 +1170,8 @@ Quartz Cluster 只能协调“哪个调度实例获得 Trigger”，不能承诺
 构建过程必须自动检查：
 
 - `api` 不依赖任何 `biz`。
+- `api` 目录按契约类型在前、业务组在后组织；复合服务的契约类型目录下必须使用组目录，禁止把业务契约直接放在契约类型根或以组目录打头，由各 `api` 模块的 `architecture` 结构测试强制。
+- common-cache 之外的模块不得声明 `spring-boot-starter-data-redis`，业务源码不得注入 `RedisTemplate`/`StringRedisTemplate`，由根构建依赖守卫与中央边界测试强制。
 - `biz` 不依赖其他服务的 `biz`。
 - `api` 不包含 Jimmer Entity、Repository、Spring Boot 启动类或数据源配置。
 - `api/dto` 只包含入参 DTO，`api/vo` 只包含出参 VO，公开事件不复用 DTO/VO。
@@ -1179,7 +1220,7 @@ Quartz Cluster 只能协调“哪个调度实例获得 Trigger”，不能承诺
 4. **拆分第一个服务**：先定义 `<service>-api` 契约，再将 Controller 和全部实现放入 `<service>-biz`，以此作为后续服务模板。
 5. **落地 Admin 复合服务**：创建 `aspen-admin-api/biz`，在 `api` 中先按契约类型组织、类型内再按 `upm/sys` 业务组归档，在 `biz` 中先按 MVC 层组织、层内再按 `upm/sys` 业务组归档；验证只有一个 `aspen-admin` Nacos 服务和一个 Admin Biz 镜像，并让包依赖、表所有权和构建产物规则通过自动化测试。
 6. **拆分认证服务**：建立 `aspen-auth-api` 与 `aspen-auth-biz`，落地统一身份、权限和服务凭证。
-7. **建立 Gateway**：创建 `aspen-gateway`，接入 Nacos 动态路由、Spring Security 和 Sentinel。
+7. **建立 Gateway**：创建 `aspen-gateway`，接入动态路由（Admin `sys_route` 权威定义、Redis 版本信封分发、Pub/Sub 通知刷新）、Spring Security 和 Sentinel。
 8. **建立同步调用**：由提供方 `api` 发布 Feign Client，消费方 `biz` 接入超时、错误解码和熔断。
 9. **建立缓存与消息**：按规则接入 Redis；由生产方 `api` 发布事件结构，在双方 `biz` 落地 Outbox、消费幂等和死信。
 10. **建立统一任务服务**：首次出现周期任务时创建 `aspen-task-api/biz`，落地 Quartz JDBC Cluster、执行 ID、Outbox 和幂等消费；此前禁止临时使用 `@Scheduled`。

@@ -9,7 +9,15 @@ class TenantFilter(
     /** 提供当前请求的租户标识 */
     private val tenantContextSupplier: TenantContextSupplier,
 ) : Filter<TenantScopedProps> {
-    /** 无租户上下文时拒绝查询, 防止 fail-open 造成跨租户数据泄漏 */
+    /**
+     * 为当前查询追加 tenantId 相等条件, 实现租户行级隔离
+     *
+     * 与接口通用的过滤器契约相比, 本实现在租户上下文缺失时选择 fail-closed,
+     * 拒绝查询以防止跨租户数据泄漏
+     *
+     * @param args Jimmer 过滤器参数, 租户条件经 args.where 追加到当前查询
+     * @throws IllegalStateException 租户上下文缺失时拒绝执行查询
+     */
     override fun filter(args: FilterArgs<TenantScopedProps>) {
         val tenantId =
             tenantContextSupplier.get() ?: throw IllegalStateException("缺少租户上下文, 拒绝执行租户数据查询")

@@ -1,21 +1,21 @@
 # Admin SYS 数据模型
 
-> 文档状态：字典表已改为全局引用数据并支持 @GenDict 枚举播种, 参数表保持租户级; 管理界面与对外查询 API 待建  
+> 文档状态：字典表已改为全局引用数据并支持 @GenDict 枚举播种, 参数表保持租户级, 路由表与 Redis 发布链路已建立; 管理界面与对外查询 API 待建  
 > 文档基线：2026-09-06  
 > 关联文档：[Admin UPM 数据模型](./admin-upm-data-model.md)｜[Common 模块设计](./common-module-design.md)
 
 ## 1. 目标与来源
 
-Admin SYS 使用 Jimmer 建模字典与运行参数, 首版覆盖 3 张表, 代码位于:
+Admin SYS 使用 Jimmer 建模字典、运行参数与网关路由, 首版覆盖 4 张表, 代码位于:
 
 ```text
 services/aspen-admin/aspen-admin-biz/src/main/kotlin/com/zax/aspen/admin/biz/entity/sys/
 services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/sys/
 ```
 
-数据按归属分为两类: 字典是平台引用数据, 全体租户共用, `sys_dict` 与 `sys_dict_item` 不做租户隔离; 参数是租户业务数据, `sys_config` 保持租户隔离。判据是「租户之间是否会各持一份不同数据」, 而不是表名前缀。将来出现按租户定制字典文案的真实需求时, 以独立覆盖表 (`tenant_id + dict_item_id + 覆盖字段`) 扩展, 不回填租户列。
+数据按归属分为两类: 字典与路由是平台引用数据, 全体租户共用, `sys_dict`、`sys_dict_item` 与 `sys_route` 不做租户隔离; 参数是租户业务数据, `sys_config` 保持租户隔离。判据是「租户之间是否会各持一份不同数据」, 而不是表名前缀。将来出现按租户定制字典文案的真实需求时, 以独立覆盖表 (`tenant_id + dict_item_id + 覆盖字段`) 扩展, 不回填租户列。
 
-本轮已建立 Entity、版本化 Schema 与 @GenDict 播种链路 (repository.sys、service.sys 与 internal 上报契约), 字典与参数的管理界面、对外查询 API 仍待建。实体属于 Admin Biz 内部持久化模型, 管理与查询走 Service; 唯一例外是 internal 上报契约, 只接收受控的字典目录结构, 不暴露实体。
+本轮已建立 Entity、版本化 Schema、@GenDict 播种链路 (repository.sys、service.sys 与 internal 上报契约) 与路由发布链路 (Redis 版本信封 + Pub/Sub 通知), 字典与参数的管理界面、对外查询 API 仍待建。实体属于 Admin Biz 内部持久化模型, 管理与查询走 Service; 唯一例外是 internal 上报契约, 只接收受控的字典目录结构, 不暴露实体。
 
 ## 2. 表清单
 
@@ -24,12 +24,14 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/sys/
 | 字典 | `sys_dict` | 全局字典定义、编码、分组、内置标记和启停状态 |
 | 字典 | `sys_dict_item` | 字典项值、显示文本、层级关系和前端展示属性 |
 | 参数 | `sys_config` | 租户级参数键值、类型声明、内置与敏感标记 |
+| 路由 | `sys_route` | 网关动态路由定义、断言与过滤器、匹配顺序和启停状态 |
 
 ## 3. Jimmer 映射约定
 
 - 映射风格与 UPM 保持一致: 数据库自增 `BIGINT UNSIGNED` 语义化主键（表名去 `sys_` 前缀加 `_id`，如 `sys_dict.dict_id`）、`DATETIME(3)` 映射 `LocalDateTime` 并按部署域统一时区存取、业务默认值通过 Jimmer `@Default` 同步 SQL 默认值、可更新实体组合乐观锁与 `deleted_at` 时间戳逻辑删除。
 - SYS 实体直接组合 `aspen-common-database` 的 `MutableAuditEntity` 与 `TenantScopedEntity`, 主键由各实体自行声明, 不创建业务包级纯组合接口, 也不依赖 `entity.upm` 的任何类型。
-- 三张表的启停状态字段已切换为 common-core 的 `EnabledStatus` 枚举, 持久化经 `AspenEnumProviders` 按 code 与数据库小写值互转, 数据零迁移; 标签色型、值类型等展示与解析约定字段仍使用 `String`。
+- 各表启停状态字段已切换为 common-core 的 `EnabledStatus` 枚举, 持久化经 `AspenEnumProviders` 按 code 与数据库小写值互转, 数据零迁移; 标签色型、值类型等展示与解析约定字段仍使用 `String`。
+- `sys_route` 的 `predicates`、`filters` 与 `metadata` 是按语义命名的专用 JSON 列, 经 Jimmer `@Serialized` 映射为类型化集合与映射, 服务层不做手工 JSON 解析, 通用约定见《技术架构》12.5 节。
 
 ## 4. 字典设计
 
@@ -57,13 +59,24 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/sys/
 - `is_sensitive` 标记敏感参数, 其值不得进入日志、导出文件和未脱敏的接口响应; 与 UPM 安全字段同等对待。
 - 参数是运行配置的业务侧补充, 不能替代 Nacos 管理的中间件与运行时配置; 高频读取的参数必须走缓存并定义回源行为。
 
-## 7. 可用性与恢复语义
+## 7. 路由设计
+
+- `sys_route` 存放 Spring Cloud Gateway 的动态路由定义, `route_code` 全局唯一并直接作为 Gateway 的 route id, 创建后不可修改; 唯一键与逻辑删除并存意味着编码一经使用即永久占用, 删除后不可重建同码, 误删恢复走逻辑删除行恢复机制。
+- 路由是平台基础设施配置, 全体租户共用同一套规则, 与字典同为全局引用数据, 不做租户隔离。
+- `uri` 只允许 `lb://` (经 Nacos 服务发现负载均衡) 与 `http://`、`https://` 直连地址, 由 Service 写入时校验; `predicates` 与 `filters` 以 `[{name, args}]` 结构类型化存储, Gateway 侧解析为 Spring Cloud Gateway 定义; `metadata` 保存路由级参数 (如 response-timeout)。
+- `sort_order` 映射路由匹配顺序, 数值小者先匹配; `status=disabled` 的路由不进入发布快照, 停用即从 Gateway 生效面移除。
+- 发布链路: 路由增删改事务提交后与 Admin 启动时, Service 全量构建带单调递增版本号的 JSON 信封, 一条 `SET` 原子替换 Redis 单 Key, 并经 Pub/Sub 频道携带版本号通知 Gateway 刷新。Redis 只是分发介质, `sys_route` 是唯一权威源, 可随时全量重建; 版本号比对防止乱序。列内 JSON 结构损坏在行映射阶段整体失败并告警, 结构合法但语义非法的单行 (如缺断言) 跳过并告警。
+- Gateway 通过只读 `RouteDefinitionRepository` 消费快照, 运行期不访问 Redis, 已加载路由不受 Redis 故障影响; actuator 直写路由被禁止, 数据库是唯一写入通道。路由管理 HTTP 契约按 §5 同款 internal 模式默认关闭, RBAC 就绪后转正式管理 API。
+- 变更通知不持久, Gateway 断线期间的发布靠下次变更或重启自愈; 周期对账在统一任务服务建立后接入, 此前不引入临时 @Scheduled。
+
+## 8. 可用性与恢复语义
 
 - `sys_dict` 与 `sys_dict_item` 是全局表: 乐观锁 `version` 防并发覆盖, `deleted_at` 逻辑删除保证误删可追溯、可恢复, 不设租户列与租户外键; 字典项随字典物理删除时 `ON DELETE CASCADE`。
+- `sys_route` 是全局表: 乐观锁与逻辑删除语义与字典一致, 误删路由可凭逻辑删除行恢复, 恢复并重新发布后即重新生效。
 - `sys_config` 保持租户隔离, `tenant_id` 外键 `ON DELETE RESTRICT` 防止误删仍有参数的租户。
 - 业务性 JSON 数据由具体表按语义命名专用列, 不使用通用 extension 兜底列。
 - 唯一约束是幂等写入的基础, 并发创建同码字典、同值字典项或同键参数时依赖数据库约束拒绝后写方。
 
-## 8. Schema 管理
+## 9. Schema 管理
 
-初始迁移为 `V002__create_sys_schema.sql`, 版本号在整个 Admin Schema 内全局唯一 (UPM 已使用 `V001`)。所有表使用 InnoDB、`utf8mb4` 和 `utf8mb4_0900_ai_ci`。后续变化采用新的前向迁移, 并遵循扩展、迁移、切换、清理顺序; 生产环境禁止依赖 Jimmer 自动建表或修改结构。
+初始迁移为 `V002__create_sys_schema.sql`, 版本号在整个 Admin Schema 内全局唯一 (UPM 已使用 `V001`)。路由表迁移为 `V003__create_sys_route.sql`, 并附带 aspen-admin 自举路由种子——Gateway 到 Admin 的首条路由无法经路由表自身发布, 由种子数据保证。所有表使用 InnoDB、`utf8mb4` 和 `utf8mb4_0900_ai_ci`。后续变化采用新的前向迁移, 并遵循扩展、迁移、切换、清理顺序; 生产环境禁止依赖 Jimmer 自动建表或修改结构。

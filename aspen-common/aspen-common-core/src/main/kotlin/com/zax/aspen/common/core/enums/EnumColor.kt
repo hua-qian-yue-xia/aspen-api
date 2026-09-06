@@ -64,6 +64,11 @@ object EnumColor {
     /** 十六进制色值格式, 作为调色板不足时的逃生口 */
     private val HEX = Regex("#[0-9a-fA-F]{6}")
 
-    /** 判断颜色是否为合法令牌或十六进制色值 */
+    /**
+     * 判断颜色是否为合法令牌或十六进制色值
+     *
+     * @param color 待校验的颜色取值, 期望为 EnumColor 调色板令牌或 #RRGGBB 十六进制色值
+     * @return color 命中调色板令牌或匹配 #RRGGBB 格式时为 `true`, 否则为 `false`
+     */
     fun isValid(color: String): Boolean = color in TOKENS || HEX.matches(color)
 }

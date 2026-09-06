@@ -26,6 +26,9 @@ dependencies {
     api(libs.spring.web)
     api(libs.jakarta.validation.api)
     implementation(libs.jackson.module.kotlin)
+
+    testImplementation(libs.kotlin.test.junit5)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 kotlin {

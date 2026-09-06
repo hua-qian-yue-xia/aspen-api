@@ -23,13 +23,25 @@ data class DatabaseLimits(
         }
     }
 
-    /** 校验业务请求的单页数量并返回原值 */
+    /**
+     * 校验业务请求的单页数量并在合法时原样返回
+     *
+     * @param pageSize 业务请求的单页数量
+     * @return 校验通过的单页数量, 即入参原值
+     * @throws IllegalArgumentException pageSize 超出 1 到 maxPageSize 范围时拒绝
+     */
     fun requirePageSize(pageSize: Int): Int {
         require(pageSize in 1..maxPageSize) { "pageSize 必须在 1 到 $maxPageSize 之间" }
         return pageSize
     }
 
-    /** 校验业务请求的批处理数量并返回原值 */
+    /**
+     * 校验业务请求的批处理数量并在合法时原样返回
+     *
+     * @param batchSize 业务请求的单批处理数量
+     * @return 校验通过的批处理数量, 即入参原值
+     * @throws IllegalArgumentException batchSize 超出 1 到 maxBatchSize 范围时拒绝
+     */
     fun requireBatchSize(batchSize: Int): Int {
         require(batchSize in 1..maxBatchSize) { "batchSize 必须在 1 到 $maxBatchSize 之间" }
         return batchSize

@@ -16,7 +16,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
-/** 验证数据库公共模块的自动配置条件和启动校验 */
+/**
+ * 验证数据库公共模块的自动配置条件和启动校验
+ */
 class AspenDatabaseAutoConfigurationTest {
     /** 创建只加载数据库公共自动配置的隔离上下文 */
     private val contextRunner = ApplicationContextRunner()
@@ -91,20 +93,29 @@ class AspenDatabaseAutoConfigurationTest {
             }
     }
 
-    /** 验证类路径扫描为 AspenEnum 枚举注册标量转换器 */
+    /** 验证类路径扫描为 AspenEnum 枚举注册承载标量转换器的 KCustomizer */
     @Test
     fun `registers scalar providers for scanned aspen enums`() {
         contextRunner.run { context ->
-            val providers = context.getBean("aspenEnumScalarProviders") as List<*>
+            val customizer = context.getBean("aspenEnumScalarProviders")
 
-            assertTrue(providers.size >= 2, "应扫描到 Gender 与 EnabledStatus 两个公共枚举")
+            assertTrue(
+                customizer is org.babyfish.jimmer.sql.kt.cfg.KCustomizer,
+                "应注册 KCustomizer 挂载扫描到的 Gender 与 EnabledStatus 等公共枚举",
+            )
         }
     }
 
-    /** 提供覆盖自动配置默认时钟的用户配置 */
+    /**
+     * 提供覆盖自动配置默认时钟的用户配置
+     */
     @Configuration(proxyBeanMethods = false)
     class CustomClockConfiguration {
-        /** 注册测试使用的固定时钟 */
+        /**
+         * 注册测试使用的固定时钟
+         *
+         * @return 固定为 Instant.EPOCH 且使用 UTC 时区的 Clock
+         */
         @Bean
         fun clock(): Clock = CLOCK
 
@@ -115,22 +126,39 @@ class AspenDatabaseAutoConfigurationTest {
         }
     }
 
-    /** 提供租户上下文提供者的用户配置 */
+    /**
+     * 提供租户上下文提供者的用户配置
+     */
     @Configuration(proxyBeanMethods = false)
     class TenantSupplierConfiguration {
-        /** 注册返回固定租户的上下文提供者 */
+        /**
+         * 注册返回固定租户的上下文提供者
+         *
+         * @return 始终返回 1L 的 TenantContextSupplier
+         */
         @Bean
         fun tenantContextSupplier(): TenantContextSupplier = TenantContextSupplier { 1L }
     }
 
-    /** 提供覆盖默认数据库限制和审计拦截器的用户配置 */
+    /**
+     * 提供覆盖默认数据库限制和审计拦截器的用户配置
+     */
     @Configuration(proxyBeanMethods = false)
     class CustomDatabaseBeansConfiguration {
-        /** 注册业务服务自行定义的数据库操作限制 */
+        /**
+         * 注册业务服务自行定义的数据库操作限制
+         *
+         * @return 默认页大小 10, 最大页大小 50, 默认批大小 20, 最大批大小 100 的 DatabaseLimits
+         */
         @Bean
         fun customDatabaseLimits(): DatabaseLimits = DatabaseLimits(10, 50, 20, 100)
 
-        /** 使用约定名称替换公共审计拦截器 */
+        /**
+         * 使用约定名称替换公共审计拦截器
+         *
+         * @param clock 审计时间戳的来源时钟
+         * @return 基于传入 clock 构建的 AuditDraftInterceptor
+         */
         @Bean("aspenAuditDraftInterceptor")
         fun customAuditDraftInterceptor(clock: Clock): AuditDraftInterceptor = AuditDraftInterceptor(clock)
     }

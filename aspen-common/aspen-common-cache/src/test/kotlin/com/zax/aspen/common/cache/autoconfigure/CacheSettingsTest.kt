@@ -7,7 +7,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-/** 验证可变外部配置到不可变缓存设置的转换规则 */
+/**
+ * 验证可变外部配置到不可变缓存设置的转换规则
+ */
 class CacheSettingsTest {
     /** 验证缓存定义被冻结且服务名可以回退到应用名称 */
     @Test
@@ -90,7 +92,11 @@ class CacheSettingsTest {
         assertFailsWith<IllegalArgumentException> { CacheSettings.from(invalidAllowedGroup, "admin") }
     }
 
-    /** 创建包含一个合法显式 Cache 定义的基础配置 */
+    /**
+     * 创建包含一个合法显式 Cache 定义的基础配置
+     *
+     * @return 含 prod 部署标识, upm 与 sys 白名单分组和 upm-user 显式定义的 AspenCacheProperties
+     */
     private fun validProperties(): AspenCacheProperties = AspenCacheProperties().apply {
         environment = "prod"
         allowedGroups += setOf("upm", "sys")
