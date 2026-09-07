@@ -10,6 +10,7 @@ import com.zax.aspen.common.core.enums.common.EnabledStatus
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.test.util.ReflectionTestUtils
 import java.time.LocalDateTime
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -21,7 +22,10 @@ class SysRouteServiceTest {
     private val sysRouteRepository: SysRouteRepository = Mockito.mock(SysRouteRepository::class.java)
     private val eventPublisher: ApplicationEventPublisher = Mockito.mock(ApplicationEventPublisher::class.java)
 
-    private val service = SysRouteService(sysRouteRepository, eventPublisher)
+    private val service = SysRouteService().apply {
+        ReflectionTestUtils.setField(this, "sysRouteRepository", sysRouteRepository)
+        ReflectionTestUtils.setField(this, "eventPublisher", eventPublisher)
+    }
 
     @Test
     fun `create route publishes changed event and returns view`() {

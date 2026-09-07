@@ -8,6 +8,7 @@ import com.zax.aspen.admin.biz.entity.sys.routeId
 import com.zax.aspen.admin.biz.entity.sys.status
 import com.zax.aspen.admin.biz.entity.sys.sortOrder
 import com.zax.aspen.common.core.enums.common.EnabledStatus
+import jakarta.annotation.Resource
 import org.babyfish.jimmer.sql.ast.mutation.SaveMode
 import org.babyfish.jimmer.sql.kt.KSqlClient
 import org.babyfish.jimmer.sql.kt.ast.expression.asc
@@ -21,9 +22,10 @@ import org.springframework.stereotype.Repository
  * 自动过滤, 查询无需手工排除已删除行
  */
 @Repository
-class SysRouteRepository(
-    private val sqlClient: KSqlClient,
-) {
+class SysRouteRepository {
+    @Resource
+    private lateinit var sqlClient: KSqlClient
+
     /**
      * 查询全部未删除路由, 按匹配顺序排列, 供管理端列表使用
      *

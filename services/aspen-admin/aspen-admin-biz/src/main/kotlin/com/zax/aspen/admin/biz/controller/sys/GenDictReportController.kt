@@ -4,6 +4,7 @@ import com.zax.aspen.admin.api.contract.sys.GenDictReportApi
 import com.zax.aspen.admin.biz.service.sys.GenDictSeeder
 import com.zax.aspen.common.core.gen.GenDictDescriptor
 import com.zax.aspen.common.gen.autoconfigure.AspenGenProperties
+import jakarta.annotation.Resource
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.web.bind.annotation.RestController
 
@@ -15,10 +16,13 @@ import org.springframework.web.bind.annotation.RestController
  */
 @RestController
 @ConditionalOnProperty(prefix = "aspen.gen.dict", name = ["enabled"], havingValue = "true")
-class GenDictReportController(
-    private val genDictSeeder: GenDictSeeder,
-    private val aspenGenProperties: AspenGenProperties,
-) : GenDictReportApi {
+class GenDictReportController : GenDictReportApi {
+    @Resource
+    private lateinit var genDictSeeder: GenDictSeeder
+
+    @Resource
+    private lateinit var aspenGenProperties: AspenGenProperties
+
     override fun reportDicts(descriptors: List<GenDictDescriptor>) {
         genDictSeeder.seed(descriptors, aspenGenProperties.dict.mode)
     }

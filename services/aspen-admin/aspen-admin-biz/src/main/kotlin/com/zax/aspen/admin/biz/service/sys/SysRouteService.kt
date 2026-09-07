@@ -6,6 +6,7 @@ import com.zax.aspen.admin.api.vo.sys.SysRouteVO
 import com.zax.aspen.admin.biz.entity.sys.SysRouteEntity
 import com.zax.aspen.admin.biz.messaging.redis.sys.SysRouteChangedEvent
 import com.zax.aspen.admin.biz.repository.sys.SysRouteRepository
+import jakarta.annotation.Resource
 import org.babyfish.jimmer.sql.exception.SaveException
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DuplicateKeyException
@@ -21,10 +22,12 @@ import java.sql.SQLIntegrityConstraintViolationException
  * 与 metadata 经 Jimmer @Serialized 与 JSON 列直接互转, 服务层不做手工 JSON 解析
  */
 @Service
-class SysRouteService(
-    private val sysRouteRepository: SysRouteRepository,
-    private val eventPublisher: ApplicationEventPublisher,
-) {
+class SysRouteService {
+    @Resource
+    private lateinit var sysRouteRepository: SysRouteRepository
+
+    @Resource
+    private lateinit var eventPublisher: ApplicationEventPublisher
     /**
      * 查询全部未删除路由的管理视图, 按匹配顺序排列
      *

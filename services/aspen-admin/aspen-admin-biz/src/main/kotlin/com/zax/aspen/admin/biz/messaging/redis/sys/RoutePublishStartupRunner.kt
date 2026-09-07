@@ -1,5 +1,6 @@
 package com.zax.aspen.admin.biz.messaging.redis.sys
 
+import jakarta.annotation.Resource
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
 import org.springframework.stereotype.Component
@@ -11,9 +12,10 @@ import org.springframework.stereotype.Component
  * Admin 即恢复分发; Redis 不可用不阻断启动, 记录错误等待下次变更或重启自愈
  */
 @Component
-class RoutePublishStartupRunner(
-    private val routeDefinitionPublisher: RouteDefinitionPublisher,
-) : ApplicationRunner {
+class RoutePublishStartupRunner : ApplicationRunner {
+    @Resource
+    private lateinit var routeDefinitionPublisher: RouteDefinitionPublisher
+
     override fun run(args: ApplicationArguments) {
         routeDefinitionPublisher.publishAllSafely()
     }

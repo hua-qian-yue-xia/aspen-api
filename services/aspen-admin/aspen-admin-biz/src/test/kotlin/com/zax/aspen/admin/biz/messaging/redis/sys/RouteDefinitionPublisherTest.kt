@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito
+import org.springframework.test.util.ReflectionTestUtils
 import tools.jackson.databind.ObjectMapper
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.KotlinModule
@@ -34,13 +35,17 @@ class RouteDefinitionPublisherTest {
         JsonMapper.builder().addModule(KotlinModule.Builder().build()).build()
     private val properties = RoutePublishProperties()
 
-    private val publisher = RouteDefinitionPublisher(
-        sysRouteRepository = sysRouteRepository,
-        aspenRedisOperations = aspenRedisOperations,
-        objectMapper = objectMapper,
-        routePublishProperties = properties,
-        clock = Clock.fixed(Instant.parse("2026-09-06T02:00:00Z"), ZoneId.of("Asia/Shanghai")),
-    )
+    private val publisher = RouteDefinitionPublisher().apply {
+        ReflectionTestUtils.setField(this, "sysRouteRepository", sysRouteRepository)
+        ReflectionTestUtils.setField(this, "aspenRedisOperations", aspenRedisOperations)
+        ReflectionTestUtils.setField(this, "objectMapper", objectMapper)
+        ReflectionTestUtils.setField(this, "routePublishProperties", properties)
+        ReflectionTestUtils.setField(
+            this,
+            "clock",
+            Clock.fixed(Instant.parse("2026-09-06T02:00:00Z"), ZoneId.of("Asia/Shanghai")),
+        )
+    }
 
     @Test
     fun `publishes versioned envelope and notifies channel`() {
