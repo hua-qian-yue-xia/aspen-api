@@ -1,4 +1,4 @@
-package com.zax.aspen.admin.api.constant
+package com.zax.aspen.common.gateway.contract
 
 /**
  * 路由分发介质的 Redis Key 与通知频道约定

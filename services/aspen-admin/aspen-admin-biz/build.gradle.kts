@@ -36,6 +36,8 @@ dependencies {
     implementation(libs.spring.boot.starter.jdbc)
     // 路由快照分发等 Redis 访问一律经 common-cache 受控操作类, 业务代码不直接依赖 Redis 客户端
     implementation(project(AspenProjects.COMMON_CACHE))
+    // 路由发布介质操作 (取号/信封/通知) 由 common-gateway 提供, Admin 只负责 sys_route 读取与行转换
+    implementation(project(AspenProjects.COMMON_GATEWAY))
     // 配置中心客户端: 只拉配置, 注册发现暂未接入; optional 导入保证无 Nacos 也能启动
     implementation(libs.spring.cloud.alibaba.nacos.config)
     implementation(libs.kotlin.reflect)

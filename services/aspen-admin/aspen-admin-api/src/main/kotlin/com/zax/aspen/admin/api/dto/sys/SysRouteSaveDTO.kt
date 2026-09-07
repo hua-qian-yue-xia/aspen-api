@@ -1,7 +1,7 @@
 package com.zax.aspen.admin.api.dto.sys
 
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionPart
 import com.zax.aspen.common.core.enums.common.EnabledStatus
+import com.zax.aspen.common.gateway.contract.RouteDefinitionPart
 
 /**
  * 网关路由的新增或修改入参

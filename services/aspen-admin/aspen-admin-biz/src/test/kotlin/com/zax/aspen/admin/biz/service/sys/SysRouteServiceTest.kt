@@ -1,6 +1,6 @@
 package com.zax.aspen.admin.biz.service.sys
 
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionPart
+import com.zax.aspen.common.gateway.contract.RouteDefinitionPart
 import com.zax.aspen.admin.api.dto.sys.SysRouteSaveDTO
 import com.zax.aspen.admin.biz.entity.sys.SysRouteEntity
 import com.zax.aspen.admin.biz.entity.sys.SysRouteEntityDraft

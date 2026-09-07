@@ -1,8 +1,8 @@
 package com.zax.aspen.admin.biz.entity.sys
 
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionPart
 import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.database.model.MutableAuditEntity
+import com.zax.aspen.common.gateway.contract.RouteDefinitionPart
 import org.babyfish.jimmer.sql.Default
 import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue

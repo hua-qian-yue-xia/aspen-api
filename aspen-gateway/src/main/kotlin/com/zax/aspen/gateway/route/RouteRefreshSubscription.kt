@@ -1,7 +1,8 @@
 package com.zax.aspen.gateway.route
 
-import com.zax.aspen.admin.api.constant.GatewayRouteContract
 import com.zax.aspen.common.cache.support.AspenRedisOperations
+import com.zax.aspen.common.gateway.GatewayRouteProperties
+import com.zax.aspen.common.gateway.contract.GatewayRouteContract
 import jakarta.annotation.Resource
 import org.slf4j.LoggerFactory
 import org.springframework.boot.ApplicationArguments

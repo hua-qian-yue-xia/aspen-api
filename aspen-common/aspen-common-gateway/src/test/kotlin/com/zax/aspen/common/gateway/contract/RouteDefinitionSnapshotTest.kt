@@ -1,7 +1,5 @@
-package com.zax.aspen.admin.api.serialization.sys
+package com.zax.aspen.common.gateway.contract
 
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionPart
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionSnapshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

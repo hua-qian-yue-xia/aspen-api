@@ -1,4 +1,4 @@
-package com.zax.aspen.admin.api.event.sys
+package com.zax.aspen.common.gateway.contract
 
 import java.net.URI
 

@@ -1,4 +1,4 @@
-package com.zax.aspen.admin.api.event.sys
+package com.zax.aspen.common.gateway.contract
 
 /**
  * 网关路由全量分发信封

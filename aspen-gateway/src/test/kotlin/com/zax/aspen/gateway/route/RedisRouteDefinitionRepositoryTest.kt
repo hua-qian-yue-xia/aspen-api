@@ -1,7 +1,8 @@
 package com.zax.aspen.gateway.route
 
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionPart
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionSnapshot
+import com.zax.aspen.common.gateway.contract.RouteDefinitionPart
+import com.zax.aspen.common.gateway.contract.RouteDefinitionSnapshot
+import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.springframework.test.util.ReflectionTestUtils

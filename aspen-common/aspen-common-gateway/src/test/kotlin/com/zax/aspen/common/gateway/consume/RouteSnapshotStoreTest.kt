@@ -1,31 +1,25 @@
-package com.zax.aspen.gateway.route
+package com.zax.aspen.common.gateway.consume
 
 import com.zax.aspen.common.cache.support.AspenRedisOperations
+import com.zax.aspen.common.gateway.GatewayRouteProperties
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
-import org.springframework.test.util.ReflectionTestUtils
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.KotlinModule
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/**
- * 覆盖路由快照的采纳、乱序忽略与降级保留语义
- */
+/** 覆盖路由快照的采纳、乱序忽略与降级保留语义 */
 class RouteSnapshotStoreTest {
     private val aspenRedisOperations: AspenRedisOperations =
         Mockito.mock(AspenRedisOperations::class.java)
 
-    private val store = RouteSnapshotStore().apply {
-        ReflectionTestUtils.setField(this, "aspenRedisOperations", aspenRedisOperations)
-        ReflectionTestUtils.setField(
-            this,
-            "objectMapper",
-            JsonMapper.builder().addModule(KotlinModule.Builder().build()).build(),
-        )
-        ReflectionTestUtils.setField(this, "gatewayRouteProperties", GatewayRouteProperties())
-    }
+    private val store = RouteSnapshotStore(
+        aspenRedisOperations = aspenRedisOperations,
+        objectMapper = JsonMapper.builder().addModule(KotlinModule.Builder().build()).build(),
+        properties = GatewayRouteProperties(),
+    )
 
     @Test
     fun `adopts newer envelope and exposes snapshots`() {

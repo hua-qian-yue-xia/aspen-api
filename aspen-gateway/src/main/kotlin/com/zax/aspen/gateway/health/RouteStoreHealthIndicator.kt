@@ -1,6 +1,6 @@
 package com.zax.aspen.gateway.health
 
-import com.zax.aspen.gateway.route.RouteSnapshotStore
+import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
 import jakarta.annotation.Resource
 import org.springframework.boot.health.contributor.Health
 import org.springframework.boot.health.contributor.HealthIndicator

@@ -1,7 +1,7 @@
 package com.zax.aspen.admin.api.vo.sys
 
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionPart
 import com.zax.aspen.common.core.enums.common.EnabledStatus
+import com.zax.aspen.common.gateway.contract.RouteDefinitionPart
 import java.time.LocalDateTime
 
 /**

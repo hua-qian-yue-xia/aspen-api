@@ -21,6 +21,9 @@ dependencies {
     // 契约引用 core 的纯数据模型 (如字典目录), 不引入任何运行时基础设施
     api(project(AspenProjects.COMMON_CORE))
 
+    // 路由契约引用 common-gateway 的纯数据模型 (信封与结构类型), 不引入任何运行时基础设施
+    api(project(AspenProjects.COMMON_GATEWAY))
+
     // 仅保留 DTO, VO, HTTP 契约和校验所需 API, 不引入任何运行时基础设施;
     // Feign Client 等到真实消费方服务随其 Cloud 设施一起发布, 避免把 openfeign 运行时传染给全部使用方
     api(libs.spring.web)

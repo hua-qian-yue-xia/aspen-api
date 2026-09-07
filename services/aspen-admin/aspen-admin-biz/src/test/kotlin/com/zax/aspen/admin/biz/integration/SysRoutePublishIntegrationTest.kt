@@ -1,13 +1,13 @@
 package com.zax.aspen.admin.biz.integration
 
-import com.zax.aspen.admin.api.constant.GatewayRouteContract
-import com.zax.aspen.admin.api.event.sys.RouteCatalogSnapshot
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionPart
 import com.zax.aspen.admin.api.dto.sys.SysRouteSaveDTO
 import com.zax.aspen.admin.biz.bootstrap.AspenAdminApplication
 import com.zax.aspen.admin.biz.service.sys.SysRouteService
 import com.zax.aspen.common.cache.support.AspenRedisOperations
 import com.zax.aspen.common.core.enums.common.EnabledStatus
+import com.zax.aspen.common.gateway.contract.GatewayRouteContract
+import com.zax.aspen.common.gateway.contract.RouteCatalogSnapshot
+import com.zax.aspen.common.gateway.contract.RouteDefinitionPart
 import org.junit.jupiter.api.MethodOrderer.OrderAnnotation
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test

@@ -1,14 +1,12 @@
-package com.zax.aspen.gateway.route
+package com.zax.aspen.common.gateway.consume
 
-import com.zax.aspen.admin.api.constant.GatewayRouteContract
-import com.zax.aspen.admin.api.event.sys.RouteCatalogSnapshot
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionSnapshot
 import com.zax.aspen.common.cache.support.AspenRedisOperations
-import jakarta.annotation.Resource
+import com.zax.aspen.common.gateway.GatewayRouteProperties
+import com.zax.aspen.common.gateway.contract.GatewayRouteContract
+import com.zax.aspen.common.gateway.contract.RouteCatalogSnapshot
+import com.zax.aspen.common.gateway.contract.RouteDefinitionSnapshot
 import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 import tools.jackson.databind.ObjectMapper
-import tools.jackson.module.kotlin.readValue
 
 /**
  * 从 Redis 加载并持有网关路由快照的唯一入口
@@ -17,18 +15,19 @@ import tools.jackson.module.kotlin.readValue
  * 不影响已加载路由; Redis 访问经 common-cache 的 AspenRedisOperations 分发原语;
  * 解析采用两段式: 信封级损坏保留旧快照并告警, 单条路由损坏跳过并告警, 不阻塞整体
  * 刷新; 版本比对由调用方先行完成, 本类只负责加载与持有
+ *
+ * 与仓库通用契约的差异: 本类是 common-gateway 的工厂装配基础设施, 协作依赖经
+ * 构造参数注入, 由 AspenGatewayAutoConfiguration 统一装配
+ *
+ * @param aspenRedisOperations common-cache 提供的 Redis 分发原语
+ * @param objectMapper Jackson 3 mapper, 用于信封与单条路由的反序列化
+ * @param properties 路由分发配置, environment 决定读取的 Redis Key
  */
-@Component
-class RouteSnapshotStore {
-    @Resource
-    private lateinit var aspenRedisOperations: AspenRedisOperations
-
-    @Resource
-    private lateinit var objectMapper: ObjectMapper
-
-    @Resource
-    private lateinit var gatewayRouteProperties: GatewayRouteProperties
-
+class RouteSnapshotStore(
+    private val aspenRedisOperations: AspenRedisOperations,
+    private val objectMapper: ObjectMapper,
+    private val properties: GatewayRouteProperties,
+) {
     @Volatile
     private var current: RouteCatalogSnapshot? = null
 
@@ -61,7 +60,7 @@ class RouteSnapshotStore {
      */
     @Synchronized
     fun refresh(): Boolean {
-        val environment = gatewayRouteProperties.environment
+        val environment = properties.environment
         val text = try {
             aspenRedisOperations.getValue(GatewayRouteContract.routesKey(environment))
         } catch (e: Exception) {

@@ -1,5 +1,6 @@
 package com.zax.aspen.gateway.route
 
+import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.springframework.cloud.gateway.event.RefreshRoutesEvent

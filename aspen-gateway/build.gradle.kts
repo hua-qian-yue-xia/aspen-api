@@ -25,8 +25,8 @@ dependencyManagement {
 }
 
 dependencies {
-    // 仅消费 admin-api 的路由契约 (纯数据模型与 Redis Key 约定), 禁止链接任何业务实现
-    implementation(project(AspenProjects.ADMIN_API))
+    // 路由分发契约与消费 SDK 统一由 common-gateway 提供, 网关只保留 SCG 集成件, 禁止链接任何业务实现
+    implementation(project(AspenProjects.COMMON_GATEWAY))
 
     // Redis 访问一律经 common-cache 受控操作类, 业务代码不直接依赖 Redis 客户端
     implementation(project(AspenProjects.COMMON_CACHE))

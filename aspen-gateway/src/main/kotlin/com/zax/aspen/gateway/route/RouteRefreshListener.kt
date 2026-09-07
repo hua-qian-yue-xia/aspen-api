@@ -2,6 +2,7 @@ package com.zax.aspen.gateway.route
 
 import jakarta.annotation.Resource
 import org.slf4j.LoggerFactory
+import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
 import org.springframework.cloud.gateway.event.RefreshRoutesEvent
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component

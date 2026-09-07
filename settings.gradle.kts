@@ -126,6 +126,7 @@ include(
     ":aspen-common-gen",
     ":aspen-common-database",
     ":aspen-common-cache",
+    ":aspen-common-gateway",
     ":aspen-admin-api",
     ":aspen-admin-biz",
     ":aspen-gateway",
@@ -134,6 +135,7 @@ project(":aspen-common-core").projectDir = file("aspen-common/aspen-common-core"
 project(":aspen-common-gen").projectDir = file("aspen-common/aspen-common-gen")
 project(":aspen-common-database").projectDir = file("aspen-common/aspen-common-database")
 project(":aspen-common-cache").projectDir = file("aspen-common/aspen-common-cache")
+project(":aspen-common-gateway").projectDir = file("aspen-common/aspen-common-gateway")
 project(":aspen-admin-api").projectDir = file("services/aspen-admin/aspen-admin-api")
 project(":aspen-admin-biz").projectDir = file("services/aspen-admin/aspen-admin-biz")
 project(":aspen-gateway").projectDir = file("aspen-gateway")

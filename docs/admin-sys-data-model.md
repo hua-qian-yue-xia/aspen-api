@@ -68,8 +68,8 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/sys/
 - 发布链路: 路由增删改事务提交后与 Admin 启动时, Service 全量构建带单调递增版本号的 JSON 信封, 一条 `SET` 原子替换 Redis 单 Key, 并经 Pub/Sub 频道携带版本号通知 Gateway 刷新。Redis 只是分发介质, `sys_route` 是唯一权威源, 可随时全量重建; 版本号比对防止乱序。列内 JSON 结构损坏在行映射阶段整体失败并告警, 结构合法但语义非法的单行 (如缺断言) 跳过并告警。
 - Gateway 通过只读 `RouteDefinitionRepository` 消费快照, 运行期不访问 Redis, 已加载路由不受 Redis 故障影响; actuator 直写路由被禁止, 数据库是唯一写入通道。路由管理 HTTP 契约按 §5 同款 internal 模式默认关闭, RBAC 就绪后转正式管理 API。
 - 变更通知不持久, Gateway 断线期间的发布靠下次变更或重启自愈; 周期对账在统一任务服务建立后接入, 此前不引入临时 @Scheduled。
-- 分发协议的全部锚点收敛在 `aspen-admin-api` 的两处: `event/sys` 的快照契约类型定义信封结构, `constant/GatewayRouteContract` 定义 Redis Key、通知频道与 environment 规则。修改分发协议时两端代码只认这两处, 禁止 Admin 或 Gateway 侧私拼 Key/频道字符串或自定信封字段。
-- 演进边界: 发布端永远是 sys 的领域职责, 留在 Admin; 只有当出现第二个真实消费者 (如运维路由查询工具、第二套网关形态) 时, 才把读侧 SDK (Redis 读取与信封解析, 即 RouteSnapshotStore 一族纯逻辑) 抽为独立公共模块, 届时抽象时机才成立。在第二个消费者出现之前, 禁止预建 common-gateway 类公共包, 防止公共模块绑死 sys 业务域与 Spring Cloud Gateway 实现。
+- 分发协议的全部锚点收敛在 `aspen-common-gateway` 模块: `contract` 包的快照契约类型定义信封结构, `GatewayRouteContract` 定义 Redis Key、通知频道与 environment 规则, `publish`/`consume` 包提供发布原语与消费 SDK, Admin 与 Gateway 各自引入该模块对接。修改分发协议时只改 common-gateway 一处, 禁止两侧私拼 Key/频道字符串或自定信封字段。
+- 职责边界: common-gateway 只承载协议与介质操作 (取号、原子替换、通知、加载持有), `sys_route` 的领域读取、行到快照的转换、变更事件与启动编排永远留在 Admin (sys 的领域职责); Spring Cloud Gateway 的路由映射与刷新集成留在网关进程。
 
 ## 8. 可用性与恢复语义
 

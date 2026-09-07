@@ -16,6 +16,8 @@ object AspenProjects {
 
     const val COMMON_CACHE = ":aspen-common-cache"
 
+    const val COMMON_GATEWAY = ":aspen-common-gateway"
+
     const val COMMON_GEN = ":aspen-common-gen"
 
     const val ADMIN_API = ":aspen-admin-api"

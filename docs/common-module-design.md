@@ -13,7 +13,8 @@ aspen-common/
 ├── aspen-common-core/
 ├── aspen-common-gen/
 ├── aspen-common-database/
-└── aspen-common-cache/
+├── aspen-common-cache/
+└── aspen-common-gateway/
 ```
 
 依赖方向只有：
@@ -22,9 +23,10 @@ aspen-common/
 aspen-common-database -> aspen-common-core
 aspen-common-cache    -> aspen-common-core
 aspen-common-gen      -> aspen-common-core
+aspen-common-gateway  -> aspen-common-cache
 ```
 
-`core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。
+`core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；`gateway` 只依赖 `cache` 取 Redis 分发原语，不依赖 `database`；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。
 
 源码注释遵守项目统一规范：注释正文使用中文，专有名称保留原文，标点使用英文字符，句尾不加句号。类、接口、枚举、对象、字段和方法必须有说明职责或约束的有效 KDoc，重要实现边界补充行注释。方法 KDoc 必须采用完整块格式（概述段 + 空行 + 每个参数的 `@param` + 非 `Unit` 返回的 `@return`），禁止只有单行概述的方法注释；该规则由根模块 KDoc 纪律测试强制。数据库实体和字段的 KDoc 必须详尽：类级注释说明职责与典型使用场景，字段有具体使用场景、取值约定、生命周期或对其他流程的影响时必须逐一写清楚，仅列名自解释且无附加语义的简单字段可不写字段注释。Jimmer 实体列名与属性名蛇形一致时不声明 `@Column`，由 Jimmer 自动解析，该规则由架构测试强制检查。完整规则和示例见《技术架构》7.8 节。
 
@@ -228,7 +230,20 @@ val cached = cacheOperations.get<UserView>("upm-user", key)
 
 common-cache 第一版不包含分布式锁、幂等、限流或任务锁。可靠业务事件使用 RocketMQ；锁和幂等在明确一致性、超时、失败与恢复语义后建立独立模块。
 
-## 6. Gen
+## 6. Gateway
+
+包根为 `com.zax.aspen.common.gateway`。网关路由分发公共模块, 承载 Admin 与 Gateway 共用的分发协议与介质操作:
+
+- `contract/GatewayRouteContract`：路由分发介质的 Redis Key、版本计数器 Key 与通知频道约定，附带 environment 格式校验；双方禁止私拼字符串。
+- `contract/RouteCatalogSnapshot`、`RouteDefinitionSnapshot`、`RouteDefinitionPart`：信封与结构契约，构造期校验协议、语法与断言存在性，非法路由进介质前即失败。
+- `GatewayRouteProperties`：`aspen.routes.environment` 配置绑定，发布侧与消费侧共用同一配置类，杜绝两侧取值漂移。
+- `publish/RouteEnvelopePublisher`：发布原语，取号（INCR）→ 组装信封 → 一条 SET 原子替换 → Pub/Sub 携带版本号通知；不关心路由来源。
+- `consume/RouteSnapshotStore`：消费 SDK，从 Redis 加载并持有内存快照，两段式解析（信封级损坏保留旧快照、单条损坏跳过），运行期零 Redis 访问。
+- `AspenGatewayAutoConfiguration`：自动装配上述设施并注册 `aspen.routes` 配置绑定。
+
+职责边界: `sys_route` 的领域读取、行到快照的转换、变更事件与启动编排留在 Admin；Spring Cloud Gateway 的路由映射与刷新集成留在网关进程；本模块不依赖任何业务模块与网关类库，Redis 访问经 common-cache 的 `AspenRedisOperations`。
+
+## 7. Gen
 
 包根为 `com.zax.aspen.common.gen`。公共生成工具模块, 第一版只提供枚举字典扫描:
 

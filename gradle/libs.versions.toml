@@ -25,6 +25,7 @@ spring-boot-starter-cache = { module = "org.springframework.boot:spring-boot-sta
 spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
 spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc" }
 spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure" }
+slf4j-api = { module = "org.slf4j:slf4j-api" }
 spring-boot-starter-quartz = { module = "org.springframework.boot:spring-boot-starter-quartz" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 spring-boot-starter-webmvc-test = { module = "org.springframework.boot:spring-boot-starter-webmvc-test" }

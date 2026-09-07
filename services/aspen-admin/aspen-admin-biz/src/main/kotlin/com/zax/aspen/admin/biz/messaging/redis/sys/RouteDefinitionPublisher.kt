@@ -1,30 +1,23 @@
 package com.zax.aspen.admin.biz.messaging.redis.sys
 
-import com.zax.aspen.admin.api.constant.GatewayRouteContract
-import com.zax.aspen.admin.api.event.sys.RouteCatalogSnapshot
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionSnapshot
-import com.zax.aspen.admin.biz.config.sys.RoutePublishProperties
 import com.zax.aspen.admin.biz.entity.sys.SysRouteEntity
 import com.zax.aspen.admin.biz.repository.sys.SysRouteRepository
-import com.zax.aspen.common.cache.support.AspenRedisOperations
+import com.zax.aspen.common.gateway.contract.RouteDefinitionSnapshot
+import com.zax.aspen.common.gateway.publish.RouteEnvelopePublisher
 import jakarta.annotation.Resource
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
-import tools.jackson.databind.ObjectMapper
-import java.time.Clock
-import java.time.OffsetDateTime
 
 /**
  * 把 sys_route 全量发布为网关路由快照
  *
- * 链路: 取号 (INCR 版本计数器) -> 构建信封 -> 一条 SET 原子替换路由 Key (无删除
- * 窗口) -> Pub/Sub 携带版本号通知各 Gateway 实例; 路由增删改经 AFTER_COMMIT 监听
+ * 链路: 读取启用路由行 -> 行转契约快照 (语义非法跳过告警) -> 交 common-gateway 的
+ * RouteEnvelopePublisher 完成取号、原子替换与通知; 路由增删改经 AFTER_COMMIT 监听
  * 触发, 启动首发经 RoutePublishStartupRunner 触发; Redis 只是分发介质, 发布失败
- * 只记录错误不回滚数据库, 由下次变更或重启自愈; Redis 访问经 common-cache 的
- * AspenRedisOperations 分发原语, JSON 列由 Jimmer @Serialized 在查询时还原为
- * 类型化集合, 本类只负责信封序列化
+ * 只记录错误不回滚数据库, 由下次变更或重启自愈; sys_route 的领域读取与行转换属于
+ * Admin 职责, 介质协议操作属于 common-gateway 职责, 本类是两段的衔接点
  */
 @Component
 class RouteDefinitionPublisher {
@@ -32,16 +25,7 @@ class RouteDefinitionPublisher {
     private lateinit var sysRouteRepository: SysRouteRepository
 
     @Resource
-    private lateinit var aspenRedisOperations: AspenRedisOperations
-
-    @Resource
-    private lateinit var objectMapper: ObjectMapper
-
-    @Resource
-    private lateinit var routePublishProperties: RoutePublishProperties
-
-    @Resource
-    private lateinit var clock: Clock
+    private lateinit var routeEnvelopePublisher: RouteEnvelopePublisher
     /**
      * 监听已提交的路由变更并重发布快照
      *
@@ -64,26 +48,13 @@ class RouteDefinitionPublisher {
     }
 
     /**
-     * 全量构建并原子发布路由快照, 返回发布版本
+     * 全量构建并发布路由快照, 返回发布版本
      *
      * @return 本次发布经 Redis 版本计数器 INCR 产生的版本号, 单调递增
      */
     fun publishAll(): Long {
-        val environment = routePublishProperties.environment
         val routes = sysRouteRepository.findAllEnabled().mapNotNull { it.toSnapshotOrNull() }
-        val version = aspenRedisOperations.increment(GatewayRouteContract.versionKey(environment))
-        val envelope = RouteCatalogSnapshot(
-            version = version,
-            publishedAt = OffsetDateTime.now(clock).toString(),
-            routes = routes,
-        )
-        aspenRedisOperations.setValue(
-            GatewayRouteContract.routesKey(environment),
-            objectMapper.writeValueAsString(envelope),
-        )
-        aspenRedisOperations.publish(GatewayRouteContract.refreshChannel(environment), version.toString())
-        log.info("路由快照已发布, version={}, routes={}", version, routes.size)
-        return version
+        return routeEnvelopePublisher.publishAll(routes)
     }
 
     /**

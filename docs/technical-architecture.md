@@ -192,6 +192,7 @@ aspen/
 │   ├── aspen-common-core/               # 错误码、业务异常、分页和纯数据校验
 │   ├── aspen-common-database/           # Jimmer、审计字段、分页和批次约束
 │   ├── aspen-common-cache/              # Redis Key、TTL、受控序列化和缓存配置
+│   ├── aspen-common-gateway/            # 网关路由分发契约、发布原语与消费 SDK
 │   ├── aspen-common-web/                # MVC、校验、异常响应、Trace ID
 │   ├── aspen-common-security/           # 身份验签、只读上下文与管理端点保护
 │   ├── aspen-common-feign/              # Feign 拦截器、超时和错误解码
@@ -505,6 +506,7 @@ val createdAt: LocalDateTime
 - Spring Web 的协议注解 API。
 - Spring Cloud OpenFeign 的契约注解 API。
 - `aspen-common-core` 中稳定、无基础设施依赖的协议基础类型。
+- `aspen-common-gateway` 中稳定、无基础设施依赖的路由分发契约类型（`contract` 包的信封与结构类型）；该例外仅限纯数据模型，`api` 不得引入其发布/消费原语。
 
 `api` 禁止引入 Spring Boot Starter、Jimmer、数据库驱动、Redis、RocketMQ Client、Nacos Client、Sentinel Runtime、日志实现和任何 `biz`。即使某个类型当前使用方便，也不能通过 `api` 把完整运行时 Starter 传递给所有消费方。
 

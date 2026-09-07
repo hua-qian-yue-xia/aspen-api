@@ -1,7 +1,8 @@
 package com.zax.aspen.gateway.route
 
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionPart
-import com.zax.aspen.admin.api.event.sys.RouteDefinitionSnapshot
+import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
+import com.zax.aspen.common.gateway.contract.RouteDefinitionPart
+import com.zax.aspen.common.gateway.contract.RouteDefinitionSnapshot
 import jakarta.annotation.Resource
 import org.springframework.cloud.gateway.filter.FilterDefinition
 import org.springframework.cloud.gateway.handler.predicate.PredicateDefinition

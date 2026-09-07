@@ -1,5 +1,6 @@
 package com.zax.aspen.gateway.route
 
+import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
 import jakarta.annotation.Resource
 import org.slf4j.LoggerFactory
 import org.springframework.boot.ApplicationArguments
