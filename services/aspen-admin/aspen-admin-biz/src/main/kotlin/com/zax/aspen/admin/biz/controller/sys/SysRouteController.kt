@@ -4,7 +4,6 @@ import com.zax.aspen.admin.api.contract.sys.SysRouteApi
 import com.zax.aspen.admin.api.dto.sys.SysRouteSaveDTO
 import com.zax.aspen.admin.api.vo.sys.SysRouteVO
 import com.zax.aspen.admin.biz.service.sys.SysRouteService
-import jakarta.annotation.Resource
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.web.bind.annotation.RestController
 
@@ -16,10 +15,9 @@ import org.springframework.web.bind.annotation.RestController
  */
 @RestController
 @ConditionalOnProperty(prefix = "aspen.admin.route-api", name = ["enabled"], havingValue = "true")
-class SysRouteController : SysRouteApi {
-    @Resource
-    private lateinit var sysRouteService: SysRouteService
-
+class SysRouteController(
+    private val sysRouteService: SysRouteService,
+) : SysRouteApi {
     override fun listRoutes(): List<SysRouteVO> = sysRouteService.listRoutes()
 
     override fun createRoute(command: SysRouteSaveDTO): SysRouteVO = sysRouteService.createRoute(command)

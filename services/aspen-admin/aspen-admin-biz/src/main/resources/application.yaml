@@ -20,3 +20,8 @@ spring:
       config:
         namespace: ${NACOS_NAMESPACE:prod}
         file-extension: yaml
+
+# Jimmer starter 的语言开关决定 sqlClient Bean 的产出类型:
+# kotlin 时直接产出 KSqlClient, Kotlin Repository 按类型注入, 无需任何桥接 Bean
+jimmer:
+  language: kotlin

@@ -7,7 +7,6 @@ import com.zax.aspen.admin.biz.config.sys.RoutePublishProperties
 import com.zax.aspen.admin.biz.entity.sys.SysRouteEntity
 import com.zax.aspen.admin.biz.repository.sys.SysRouteRepository
 import com.zax.aspen.common.cache.support.AspenRedisOperations
-import jakarta.annotation.Resource
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
@@ -27,21 +26,13 @@ import java.time.OffsetDateTime
  * 类型化集合, 本类只负责信封序列化
  */
 @Component
-class RouteDefinitionPublisher {
-    @Resource
-    private lateinit var sysRouteRepository: SysRouteRepository
-
-    @Resource
-    private lateinit var aspenRedisOperations: AspenRedisOperations
-
-    @Resource
-    private lateinit var objectMapper: ObjectMapper
-
-    @Resource
-    private lateinit var routePublishProperties: RoutePublishProperties
-
-    @Resource
-    private lateinit var clock: Clock
+class RouteDefinitionPublisher(
+    private val sysRouteRepository: SysRouteRepository,
+    private val aspenRedisOperations: AspenRedisOperations,
+    private val objectMapper: ObjectMapper,
+    private val routePublishProperties: RoutePublishProperties,
+    private val clock: Clock,
+) {
     /**
      * 监听已提交的路由变更并重发布快照
      *
