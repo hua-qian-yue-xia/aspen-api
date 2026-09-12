@@ -29,6 +29,9 @@ dependencies {
     implementation(libs.spring.boot.autoconfigure)
     // Filter 的编译期 Servlet API, 运行期由使用方内嵌容器提供
     compileOnly(libs.jakarta.servlet.api)
+    // 异常处理器引用 ConstraintViolationException (服务层 @Validated 校验), API 级 jar
+    // 零传递依赖且随模块入运行期, 保证未引 starter-validation 的服务也能安全装载 advice
+    implementation(libs.jakarta.validation.api)
     // MDC 日志关联与异常处理器日志
     implementation(libs.slf4j.api)
 

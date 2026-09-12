@@ -13,13 +13,14 @@ import org.quartz.JobExecutionContext
  */
 class LogRetentionJob : Job {
     /**
-     * 执行一次保留期清理与僵尸运行态回收
+     * 执行一次保留期清理 (执行记录与过程日志) 与僵尸运行态回收
      *
      * @param context Quartz 触发上下文, 提供 Scheduler Context
      */
     override fun execute(context: JobExecutionContext) {
         val service = context.scheduler.getContext()[QuartzTaskKeys.CONTEXT_LOG_RETENTION] as LogRetentionService
         service.purgeExpired()
+        service.purgeExpiredLogs()
         service.sweepStaleRunning()
     }
 }

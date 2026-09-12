@@ -1,6 +1,7 @@
 package com.zax.aspen.common.web.trace
 
 import com.zax.aspen.common.web.fixture.FixtureApplication
+import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -9,6 +10,7 @@ import org.springframework.test.web.servlet.get
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -67,5 +69,13 @@ class AspenTraceIdFilterTest {
             result.response.contentAsString.contains("\"traceId\":\"$header\""),
             "body traceId 应与响应头一致: ${result.response.contentAsString}",
         )
+    }
+
+    /** 验证请求结束后 MDC 被清理, finally 防线程池复用串号是过滤器的核心理由 */
+    @Test
+    fun `clears MDC after request completes`() {
+        mockMvc.get("/fixture").andReturn()
+
+        assertNull(MDC.get(TraceId.MDC_KEY), "请求结束后 MDC traceId 必须被清理, 防止线程池复用串号")
     }
 }

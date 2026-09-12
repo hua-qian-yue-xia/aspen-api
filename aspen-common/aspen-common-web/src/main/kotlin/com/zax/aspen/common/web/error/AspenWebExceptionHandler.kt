@@ -4,18 +4,23 @@ import com.zax.aspen.common.core.error.BusinessException
 import com.zax.aspen.common.core.error.CommonErrorCode
 import com.zax.aspen.common.core.error.ErrorCode
 import com.zax.aspen.common.web.trace.TraceId
+import jakarta.validation.ConstraintViolationException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.HttpMediaTypeNotSupportedException
+import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.RequestContextHolder
 import org.springframework.web.context.request.ServletRequestAttributes
 import org.springframework.web.method.annotation.HandlerMethodValidationException
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 import java.net.URI
 
@@ -25,6 +30,8 @@ import java.net.URI
  * 成功响应直接返回 DTO/VO, 失败响应经本类统一为 `application/problem+json`:
  * `title` 取 `ErrorCode.defaultMessage`, `detail` 取可安全外发的错误详情,
  * 扩展字段 `code` 为稳定机器错误码、`traceId` 为排查标识 (与响应头、MDC 一致)。
+ * 协议级客户端错误 (方法不支持 405、媒体类型不支持 415、缺参/类型不匹配 400)
+ * 与校验失败同属 4xx 契约, 必须精确渲染、不得落入兜底 500 污染告警语义;
  * 兜底异常的 `detail` 只给安全消息, 原始异常与堆栈只随日志 (携带 traceId) 落盘;
  * `type` 在错误文档站真实存在前保持默认 `about:blank`, 机器判别以 `code` 为准
  */
@@ -91,6 +98,83 @@ class AspenWebExceptionHandler(
     fun handleUnreadableBody(exception: HttpMessageNotReadableException): ProblemDetail {
         logger.warn("请求体不可读", exception)
         return problem(HttpStatus.BAD_REQUEST, CommonErrorCode.INVALID_ARGUMENT, "请求体格式不正确")
+    }
+
+    /**
+     * 渲染请求方法不支持
+     *
+     * @param exception HTTP 方法与接口全部映射不匹配的框架异常
+     * @return 405 Problem Details, detail 指明被拒绝的方法, 属客户端协议错误不得落入兜底 500
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
+    fun handleMethodNotSupported(exception: HttpRequestMethodNotSupportedException): ProblemDetail {
+        logger.warn("请求方法不支持 method={}", exception.method)
+        return problem(
+            HttpStatus.METHOD_NOT_ALLOWED,
+            CommonErrorCode.METHOD_NOT_ALLOWED,
+            "请求方法 ${exception.method} 不被支持",
+        )
+    }
+
+    /**
+     * 渲染请求媒体类型不支持
+     *
+     * @param exception 请求 Content-Type 无可用消息转换器的框架异常
+     * @return 415 Problem Details, detail 回显客户端自己发送的媒体类型, 属客户端协议错误
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException::class)
+    fun handleMediaTypeNotSupported(exception: HttpMediaTypeNotSupportedException): ProblemDetail {
+        logger.warn("媒体类型不支持 contentType={}", exception.contentType)
+        val detail = exception.contentType
+            ?.let { "Content-Type '$it' 不被支持" }
+            ?: CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.defaultMessage
+        return problem(HttpStatus.UNSUPPORTED_MEDIA_TYPE, CommonErrorCode.UNSUPPORTED_MEDIA_TYPE, detail)
+    }
+
+    /**
+     * 渲染缺少必填请求参数
+     *
+     * @param exception 必填 @RequestParam 缺失的绑定异常, 参数名是 API 契约可安全外发
+     * @return 400 Problem Details, detail 指明缺失的参数名
+     */
+    @ExceptionHandler(MissingServletRequestParameterException::class)
+    fun handleMissingParameter(exception: MissingServletRequestParameterException): ProblemDetail {
+        logger.warn("缺少请求参数 name={} type={}", exception.parameterName, exception.parameterType)
+        return problem(
+            HttpStatus.BAD_REQUEST,
+            CommonErrorCode.INVALID_ARGUMENT,
+            "缺少必填请求参数: ${exception.parameterName}",
+        )
+    }
+
+    /**
+     * 渲染请求参数类型不匹配
+     *
+     * @param exception 参数绑定类型转换失败的异常, 参数名是 API 契约可安全外发
+     * @return 400 Problem Details, detail 指明类型不匹配的参数名
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    fun handleTypeMismatch(exception: MethodArgumentTypeMismatchException): ProblemDetail {
+        logger.warn("参数类型不匹配 name={}", exception.name)
+        return problem(HttpStatus.BAD_REQUEST, CommonErrorCode.INVALID_ARGUMENT, "请求参数 ${exception.name} 类型不正确")
+    }
+
+    /**
+     * 渲染服务层方法级校验失败
+     *
+     * Spring 6.1 起 Controller 参数约束由 MVC 内建校验抛 HandlerMethodValidationException
+     * (已由 [handleMethodValidation] 渲染), 本处理器承接非 Controller Bean (`@Validated`
+     * 服务) 抛出的校验异常
+     *
+     * @param exception 方法级校验聚合的约束违反异常
+     * @return 400 Problem Details, detail 聚合全部约束消息
+     */
+    @ExceptionHandler(ConstraintViolationException::class)
+    fun handleConstraintViolation(exception: ConstraintViolationException): ProblemDetail {
+        val detail = exception.constraintViolations.joinToString("; ") { it.message }
+            .ifBlank { CommonErrorCode.INVALID_ARGUMENT.defaultMessage }
+        logger.warn("方法级校验失败 detail={}", detail)
+        return problem(HttpStatus.BAD_REQUEST, CommonErrorCode.INVALID_ARGUMENT, detail)
     }
 
     /**

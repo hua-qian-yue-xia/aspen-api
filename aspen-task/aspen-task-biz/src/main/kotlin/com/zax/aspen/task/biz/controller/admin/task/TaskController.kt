@@ -7,9 +7,11 @@ import com.zax.aspen.task.api.dto.TaskPageQuery
 import com.zax.aspen.task.api.dto.TaskSaveDTO
 import com.zax.aspen.task.api.dto.TaskStatusUpdateDTO
 import com.zax.aspen.task.api.dto.TaskTriggerDTO
+import com.zax.aspen.task.api.vo.TaskExecutionLogVO
 import com.zax.aspen.task.api.vo.TaskExecutionVO
 import com.zax.aspen.task.api.vo.TaskVO
 import com.zax.aspen.task.biz.service.task.TaskDefinitionService
+import com.zax.aspen.task.biz.service.task.TaskExecutionLogService
 import com.zax.aspen.task.biz.service.task.TaskExecutionService
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDateTime
@@ -25,6 +27,7 @@ import java.time.LocalDateTime
 class TaskController(
     private val taskDefinitionService: TaskDefinitionService,
     private val taskExecutionService: TaskExecutionService,
+    private val taskExecutionLogService: TaskExecutionLogService,
 ) : TaskApi {
     override fun createTask(command: TaskSaveDTO): TaskVO = taskDefinitionService.createTask(command)
 
@@ -50,4 +53,7 @@ class TaskController(
         taskExecutionService.pageExecutions(query)
 
     override fun retryExecution(executionId: String) = taskExecutionService.retryExecution(executionId)
+
+    override fun executionLogs(executionId: String): List<TaskExecutionLogVO> =
+        taskExecutionLogService.executionLogs(executionId)
 }

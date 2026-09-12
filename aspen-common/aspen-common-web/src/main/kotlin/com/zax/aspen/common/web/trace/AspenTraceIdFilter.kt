@@ -12,7 +12,10 @@ import org.springframework.web.filter.OncePerRequestFilter
  * 进入请求时读取 [TraceId.HEADER] (合法则复用网关或调用方透传值, 非法或缺失则本地生成),
  * 写入 MDC 供日志模式取值, 并在响应头回写同一标识; 所有响应 (成功与失败) 都携带
  * [TraceId.HEADER], 前端从响应头即可取得排查标识。注册序必须为最高优先级,
- * 保证 MDC 覆盖完整请求周期 (含后续 Filter 与异常处理器的日志)
+ * 保证 MDC 覆盖完整请求周期 (含后续 Filter 与异常处理器的日志)。
+ * 本过滤器按同步请求模型设计: `OncePerRequestFilter` 默认跳过异步再分发,
+ * 若未来引入 Callable/DeferredResult 等异步 Controller, 完成线程与再分发阶段
+ * MDC 将无 traceId, 届时须覆写 shouldNotFilterAsyncDispatch 返回 false 或另行改造
  */
 class AspenTraceIdFilter : OncePerRequestFilter() {
 

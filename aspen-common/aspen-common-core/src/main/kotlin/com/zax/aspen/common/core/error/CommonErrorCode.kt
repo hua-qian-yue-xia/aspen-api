@@ -12,6 +12,12 @@ enum class CommonErrorCode(
     /** 请求参数不符合协议约束 */
     INVALID_ARGUMENT("COMMON.INVALID_ARGUMENT", "请求参数不正确"),
 
+    /** 请求方法不被目标接口支持 */
+    METHOD_NOT_ALLOWED("COMMON.METHOD_NOT_ALLOWED", "请求方法不支持"),
+
+    /** 请求实体的媒体类型不被目标接口支持 */
+    UNSUPPORTED_MEDIA_TYPE("COMMON.UNSUPPORTED_MEDIA_TYPE", "请求的媒体类型不支持"),
+
     /** 请求的资源不存在 */
     RESOURCE_NOT_FOUND("COMMON.RESOURCE_NOT_FOUND", "请求的资源不存在"),
 

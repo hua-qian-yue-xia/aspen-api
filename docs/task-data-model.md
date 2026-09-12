@@ -1,6 +1,6 @@
 # Aspen Task 数据模型
 
-> 文档状态：首版 3 表 Entity、域枚举、初始迁移（含 Quartz 集群表）与管理/调度/HTTP 投递链路已建立；管理端 RBAC、消息通道投递与失败告警通知待建  
+> 文档状态：首版 4 表 Entity、域枚举、初始迁移（含 Quartz 集群表）与管理/调度/HTTP 投递链路已建立；执行日志回传通道（`task_execution_log` + 内部回传契约）已落地；管理端 RBAC、消息通道投递、心跳与协作式取消待建  
 > 文档基线：2026-09-12  
 > 关联文档：[技术架构](./technical-architecture.md)（14.1 节为调度语义权威）｜[Common 模块设计](./common-module-design.md)｜[Admin UPM 数据模型](./admin-upm-data-model.md)
 
@@ -27,6 +27,7 @@ aspen-task/aspen-task-biz/src/main/resources/db/migration/          # V001 业�
 | 定义 | `task_definition` | 任务定义：触发规则（cron/固定间隔/一次性）、HTTP 目标、超时重试、租户圈定、misfire/并发策略与启停状态 |
 | 定义 | `task_tenant` | `SELECTED_TENANTS` 圈定的租户清单，(definition_id, tenant_id) 唯一 |
 | 执行 | `task_execution` | 逐租户逻辑执行记录：executionId 主键、attempt、状态机、失败类别、HTTP 状态与响应片段 |
+| 执行 | `task_execution_log` | 执行过程日志：目标服务按 executionId 顺序上报的步骤/进度/告警日志，回传幂等 |
 | 运行时 | `QRTZ_*`（11 张） | Quartz JDBC Cluster 调度运行时状态，上游官方 DDL 原样引入，不对管理端暴露 |
 
 ## 3. Jimmer 映射约定
@@ -56,6 +57,7 @@ aspen-task/aspen-task-biz/src/main/resources/db/migration/          # V001 业�
 - 失败重试由状态机编排：失败且 `attempt < max_attempts` 时创建一次性 Quartz Trigger（延迟 `backoff_seconds`）复用 executionId 再次投递，不用阻塞 sleep 占用调度线程；重试耗尽保持 FAILED。管理端可对失败执行手动重派（attempt+1 立即投递）。
 - 执行状态机：`RUNNING → SUCCESS / FAILED`，另有 `SKIPPED`（并发策略跳过）；失败类别 `failure_kind` 细分 `timeout / http_error / connection_error / target_rejected / interrupted`，修正参考项目只有异常 message 的可观测缺口。`response_snippet` 截断存储（默认 2000 字符）。
 - 投递请求头：租户头 `X-Aspen-Tenant-Id`（常量收敛于 common-core）+ 溯源头 `X-Aspen-Task-Id / X-Aspen-Execution-Id / X-Aspen-Attempt / X-Aspen-Fire-Time`（常量收敛于 task-api `constant`）；目标服务以 executionId 幂等、按 attempt 识别合法重试，租户上下文缺失时 fail-closed 拒绝（common-database 既有语义）。
+- **执行过程日志回传**：HTTP 投递只回写一次终态，执行中的走向经回传通道补齐——目标服务从溯源请求头取得 `executionId`，按步骤调 `POST /internal/task/execution-log`（task-api `TaskLogReportApi` 契约，批量携带自增 `seq`、级别与消息）；`(execution_id, seq)` 唯一约束使重复上报幂等跳过、乱序到达不破坏排序，`logged_at` 记录目标侧时间、`created_at` 记录平台接收时间。管理端经 `GET /admin-api/task/execution/{executionId}/log` 按 seq 升序查看完整走向；外部项目可选遵循（不回传只影响可观测性，不影响执行语义）。该通道是依赖方向表「business-biz -> aspen-task-api 回传任务执行结果」的首个落地形态，未来心跳与协作式取消沿同一通道扩展。
 
 ## 6. HTTP 目标校验（SSRF 防护）
 
@@ -66,7 +68,7 @@ aspen-task/aspen-task-biz/src/main/resources/db/migration/          # V001 业�
 ## 7. 可用性与恢复语义
 
 - `task_definition` 乐观锁 + 逻辑删除：并发修改被拒（刷新重试），误删可恢复；恢复或重建后由启动对账器补齐 Quartz 运行时。删除任务 = 定义行逻辑删除 + Quartz Job/Trigger 清理 + `task_tenant` 物理清理；执行记录保留供审计。
-- `task_execution` 物理删除走保留期治理：`housekeeping` 内置系统任务（每日）清理超过保留天数（默认 30，可配）的执行记录，并回收僵尸 RUNNING（启动时与每日各扫一次：RUNNING 且超过回收窗口的行置 FAILED/interrupted——实例崩溃遗留）。
+- `task_execution` 与 `task_execution_log` 物理删除走保留期治理：`housekeeping` 内置系统任务（每日）清理超过保留天数（默认 30，可配）的执行记录与日志（日志不与执行记录建外键，两条保留期扫描独立推进，避免删除顺序耦合），并回收僵尸 RUNNING（启动时与每日各扫一次：RUNNING 且超过回收窗口的行置 FAILED/interrupted——实例崩溃遗留）。
 - 集群语义：全部实例共享 Task Schema 与 Quartz JobStore（`isClustered`、唯一实例 ID、数据库锁抢占与故障接管）；「哪个实例获得 Trigger」由 Quartz 保证，「投递不重复」不保证——语义为 At Least Once + 目标幂等。
 - 事务边界：Quartz 调度操作使用自身连接独立提交，不参与定义表事务；「先 Quartz 后 DB」的窗口期漂移（DB 回滚遗留孤儿 Trigger、DB 提交失败）由对账器闭环，这是受控选择而非缺陷。
 - 全租户解析失败（Admin 不可达且缓存未命中）发生在执行展开之前：整轮跳过并记录 ERROR 日志（任务编码 + 轮次），下一轮自然重试，不静默吞掉；指定租户任务读取本地 `task_tenant` 清单，不受 Admin 可用性影响。
@@ -80,4 +82,4 @@ aspen-task/aspen-task-biz/src/main/resources/db/migration/          # V001 业�
 
 ## 9. Schema 管理
 
-初始迁移位于 `db/migration/` 根（单业务域不分组）：`V001__create_task_schema.sql`（task_definition → task_tenant → task_execution，满足唯一键与引用顺序）、`V002__create_quartz_schema.sql`（Quartz 上游 MySQL InnoDB 官方 DDL 原样引入，文件头标注来源与勿改；`spring.quartz.jdbc.initialize-schema=never`，表结构升级随 Quartz 版本走官方脚本）。Task 的版本序列独立于 Admin（Admin sys 已用 V002–V005、upm 用 V001），服务内全局唯一、只增不改。所有表 InnoDB、`utf8mb4`、`utf8mb4_0900_ai_ci`；业务表不与 `QRTZ_*` 建外键，运行时表的生命周期归 Quartz 管理。
+初始迁移位于 `db/migration/` 根（单业务域不分组）：`V001__create_task_schema.sql`（task_definition → task_tenant → task_execution，满足唯一键与引用顺序）、`V002__create_quartz_schema.sql`（Quartz 上游 MySQL InnoDB 官方 DDL 原样引入，文件头标注来源与勿改；`spring.quartz.jdbc.initialize-schema=never`，表结构升级随 Quartz 版本走官方脚本）、`V003__create_task_execution_log.sql`（执行过程日志表）。Task 的版本序列独立于 Admin（Admin sys 已用 V002–V005、upm 用 V001），服务内全局唯一、只增不改。所有表 InnoDB、`utf8mb4`、`utf8mb4_0900_ai_ci`；业务表不与 `QRTZ_*` 建外键，运行时表的生命周期归 Quartz 管理。

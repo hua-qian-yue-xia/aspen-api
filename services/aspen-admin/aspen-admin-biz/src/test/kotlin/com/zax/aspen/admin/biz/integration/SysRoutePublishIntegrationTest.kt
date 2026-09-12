@@ -32,7 +32,7 @@ import kotlin.test.assertTrue
 /**
  * 验证路由管理到 Redis 分发的真实链路
  *
- * Docker 可用时启动 Testcontainers MySQL 与 Redis, 执行 V001 至 V003 迁移后验证:
+ * Docker 可用时启动 Testcontainers MySQL 与 Redis, 执行 V001 至 V004 迁移后验证:
  * 种子路由随上下文启动首发、增删改事务提交后增量发布、版本单调递增、
  * 停用与删除即从快照移除、已删除编码不可复用; Docker 不可用时整类禁用
  */
@@ -192,6 +192,8 @@ class SysRoutePublishIntegrationTest {
 
         init {
             mysql?.let { container ->
+                // 迁移清单为硬编码、需随新增迁移文件手工同步 (GenDictSeederIntegrationTest 同款):
+                // 新迁移未登记时本类仍可启动, 但种子断言跑在旧库结构上, 失败原因会指向旧值
                 listOf(
                     "/db/migration/upm/V001__create_upm_schema.sql",
                     "/db/migration/sys/V002__create_sys_schema.sql",

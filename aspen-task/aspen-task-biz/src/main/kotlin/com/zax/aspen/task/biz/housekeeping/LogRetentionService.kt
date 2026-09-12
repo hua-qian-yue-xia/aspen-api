@@ -1,21 +1,24 @@
 package com.zax.aspen.task.biz.housekeeping
 
 import com.zax.aspen.task.biz.config.AspenTaskProperties
+import com.zax.aspen.task.biz.repository.task.TaskExecutionLogRepository
 import com.zax.aspen.task.biz.repository.task.TaskExecutionRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
 
 /**
- * 执行记录保留期治理
+ * 执行记录与过程日志的保留期治理
  *
- * 平台自持家: 按保留天数分批物理删除过期执行记录, 并回收超过回收窗口仍未回写的
- * 僵尸 RUNNING 执行 (投递实例崩溃遗留); 由系统 Quartz Job 每日触发与启动对账器
- * 各执行一次, 两处触发幂等
+ * 平台自持家: 按保留天数分批物理删除过期执行记录与过程日志 (两条扫描独立
+ * 推进, 不依赖删除顺序), 并回收超过回收窗口仍未回写的僵尸 RUNNING 执行
+ * (投递实例崩溃遗留); 由系统 Quartz Job 每日触发与启动对账器各执行一次,
+ * 两处触发幂等
  */
 @Service
 class LogRetentionService(
     private val taskExecutionRepository: TaskExecutionRepository,
+    private val taskExecutionLogRepository: TaskExecutionLogRepository,
     private val properties: AspenTaskProperties,
 ) {
     /**
@@ -40,6 +43,32 @@ class LogRetentionService(
         }
         if (removed > 0) {
             log.info("执行记录保留期清理完成: 删除 {} 条 (保留 {} 天)", removed, retentionDays)
+        }
+        return removed
+    }
+
+    /**
+     * 物理删除超过保留期的执行过程日志, 分批循环直至清空
+     *
+     * @return 本次删除的日志总数, 保留期治理关闭时返回 0
+     */
+    fun purgeExpiredLogs(): Int {
+        val retentionDays = properties.housekeeping.logRetentionDays
+        if (retentionDays <= 0) {
+            return 0
+        }
+        val cutoff = LocalDateTime.now().minusDays(retentionDays.toLong())
+        var removed = 0
+        while (true) {
+            val ids = taskExecutionLogRepository.findExpiredIds(cutoff, BATCH_SIZE)
+            if (ids.isEmpty()) {
+                break
+            }
+            taskExecutionLogRepository.deleteByIds(ids)
+            removed += ids.size
+        }
+        if (removed > 0) {
+            log.info("执行日志保留期清理完成: 删除 {} 条 (保留 {} 天)", removed, retentionDays)
         }
         return removed
     }

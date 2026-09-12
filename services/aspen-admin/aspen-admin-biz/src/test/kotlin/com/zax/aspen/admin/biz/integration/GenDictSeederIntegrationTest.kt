@@ -252,6 +252,8 @@ class GenDictSeederIntegrationTest {
 
         init {
             mysql?.let { container ->
+                // 迁移清单为硬编码、需随新增迁移文件手工同步 (SysRoutePublishIntegrationTest 同款):
+                // 新迁移未登记时本类仍可启动, 但断言跑在旧库结构上
                 listOf(
                     "/db/migration/upm/V001__create_upm_schema.sql",
                     "/db/migration/sys/V002__create_sys_schema.sql",

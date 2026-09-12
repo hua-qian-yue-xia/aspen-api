@@ -13,9 +13,10 @@ import kotlin.test.assertFailsWith
 /**
  * 验证 Task 初始迁移在真实 MySQL 上可执行且核心约束行为正确
  *
- * Docker 可用时启动 Testcontainers MySQL 依次执行 V001 (业务表) 与 V002 (Quartz
- * 运行时表) 后验证: 三张业务表与 11 张 QRTZ 表齐备、圈定租户唯一键幂等拒绝、
- * execution_id 字符串主键承载逻辑执行幂等; Docker 不可用时整类禁用。
+ * Docker 可用时启动 Testcontainers MySQL 依次执行 V001 (业务表)、V002 (Quartz
+ * 运行时表) 与 V003 (执行日志表) 后验证: 四张业务表与 11 张 QRTZ 表齐备、
+ * 圈定租户唯一键幂等拒绝、execution_id 字符串主键承载逻辑执行幂等、日志
+ * (execution_id, seq) 唯一键承载回传幂等; Docker 不可用时整类禁用。
  * 所有语句都是编译期常量 SQL, 动态值一律占位符绑定, 各测试方法使用互不相同
  * 的种子主键与编码, 不依赖执行顺序
  */
@@ -46,6 +47,22 @@ class TaskSchemaIntegrationTest {
                 "同任务同租户必须被 uk_task_tenant_definition_tenant 拒绝",
             ) {
                 insertTaskTenantRow(connection, definitionId = 1L, tenantId = 100L)
+            }
+        }
+    }
+
+    /** 验证执行日志按 (execution_id, seq) 幂等: 重复序号被唯一键拒绝 */
+    @Test
+    fun `execution log unique key rejects duplicate sequence`() {
+        withConnection { connection ->
+            insertDefinitionRow(connection, definitionId = 4L, taskCode = "log-uk-local")
+            insertExecutionRow(connection, executionId = "task-4-f1700000000000-100", definitionId = 4L, tenantId = 100L)
+            insertExecutionLogRow(connection, executionId = "task-4-f1700000000000-100", seq = 1, message = "开始同步")
+
+            assertFailsWith<java.sql.SQLIntegrityConstraintViolationException>(
+                "重复日志序号必须被 uk_task_execution_log_execution_seq 拒绝",
+            ) {
+                insertExecutionLogRow(connection, executionId = "task-4-f1700000000000-100", seq = 1, message = "重复上报")
             }
         }
     }
@@ -129,6 +146,24 @@ class TaskSchemaIntegrationTest {
     }
 
     /**
+     * 插入一条执行过程日志
+     *
+     * @param connection 目标数据库连接
+     * @param executionId 所属逻辑执行唯一标识
+     * @param seq 执行内自增序号
+     * @param message 日志消息文本
+     */
+    private fun insertExecutionLogRow(connection: Connection, executionId: String, seq: Int, message: String) {
+        connection.prepareStatement(
+            "INSERT INTO task_execution_log (execution_id, seq, level, message, logged_at) VALUES (?, ?, ?, ?, ?)",
+        ).use { statement ->
+            listOf(executionId, seq, "info", message, "2026-09-12 00:00:01")
+                .forEachIndexed { index, parameter -> statement.setObject(index + 1, parameter) }
+            statement.executeUpdate()
+        }
+    }
+
+    /**
      * 借共享容器连接执行受检代码块
      *
      * @param block 消费连接的验证逻辑
@@ -139,7 +174,7 @@ class TaskSchemaIntegrationTest {
 
     private companion object {
         /** 业务表集合 */
-        val BUSINESS_TABLES = setOf("task_definition", "task_execution", "task_tenant")
+        val BUSINESS_TABLES = setOf("task_definition", "task_execution", "task_execution_log", "task_tenant")
 
         /** Quartz 运行时表集合 (上游官方 11 张) */
         val QUARTZ_TABLES = setOf(
@@ -173,6 +208,7 @@ class TaskSchemaIntegrationTest {
                 container.createConnection("").use { connection ->
                     ScriptUtils.executeSqlScript(connection, ClassPathResource("/db/migration/V001__create_task_schema.sql"))
                     ScriptUtils.executeSqlScript(connection, ClassPathResource("/db/migration/V002__create_quartz_schema.sql"))
+                    ScriptUtils.executeSqlScript(connection, ClassPathResource("/db/migration/V003__create_task_execution_log.sql"))
                 }
             }
         }

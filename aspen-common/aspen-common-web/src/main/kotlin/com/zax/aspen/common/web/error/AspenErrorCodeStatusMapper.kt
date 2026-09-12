@@ -16,6 +16,8 @@ class AspenErrorCodeStatusMapper {
     /** 以稳定机器码为 key 的公共错误码映射表 */
     private val statusByCode: Map<String, HttpStatus> = mapOf(
         CommonErrorCode.INVALID_ARGUMENT.code to HttpStatus.BAD_REQUEST,
+        CommonErrorCode.METHOD_NOT_ALLOWED.code to HttpStatus.METHOD_NOT_ALLOWED,
+        CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.code to HttpStatus.UNSUPPORTED_MEDIA_TYPE,
         CommonErrorCode.RESOURCE_NOT_FOUND.code to HttpStatus.NOT_FOUND,
         CommonErrorCode.STATE_CONFLICT.code to HttpStatus.CONFLICT,
         CommonErrorCode.DEPENDENCY_UNAVAILABLE.code to HttpStatus.SERVICE_UNAVAILABLE,

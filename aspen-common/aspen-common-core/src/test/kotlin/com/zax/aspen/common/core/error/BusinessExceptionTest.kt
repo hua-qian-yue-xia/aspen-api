@@ -26,6 +26,8 @@ class BusinessExceptionTest {
     fun `uses Chinese default messages for every common error`() {
         val expectedMessages = mapOf(
             CommonErrorCode.INVALID_ARGUMENT to "请求参数不正确",
+            CommonErrorCode.METHOD_NOT_ALLOWED to "请求方法不支持",
+            CommonErrorCode.UNSUPPORTED_MEDIA_TYPE to "请求的媒体类型不支持",
             CommonErrorCode.RESOURCE_NOT_FOUND to "请求的资源不存在",
             CommonErrorCode.STATE_CONFLICT to "资源状态不允许执行当前操作",
             CommonErrorCode.DEPENDENCY_UNAVAILABLE to "依赖服务暂时不可用",

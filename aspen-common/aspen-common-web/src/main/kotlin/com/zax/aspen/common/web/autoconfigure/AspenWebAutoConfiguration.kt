@@ -5,6 +5,7 @@ import com.zax.aspen.common.web.error.AspenWebExceptionHandler
 import com.zax.aspen.common.web.trace.AspenTraceIdFilter
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
@@ -55,29 +56,38 @@ class AspenWebAutoConfiguration(
     /**
      * 注册 Trace ID 过滤器
      *
-     * 注册序取最高优先级, 保证 MDC 先于一切业务 Filter 建立并覆盖完整请求周期
+     * 注册序取最高优先级, 保证 MDC 先于一切业务 Filter 建立并覆盖完整请求周期;
+     * 业务声明同名 Bean 即覆盖默认注册
      *
      * @return Trace ID 过滤器的注册件
      */
-    @Bean
+    @Bean("aspenTraceIdFilter")
+    @ConditionalOnMissingBean(name = ["aspenTraceIdFilter"])
     fun aspenTraceIdFilter(): FilterRegistrationBean<AspenTraceIdFilter> =
         FilterRegistrationBean(AspenTraceIdFilter()).apply { order = Ordered.HIGHEST_PRECEDENCE }
 
     /**
      * 注册错误码到 HTTP 状态的映射
      *
+     * 业务声明同类型 Bean 即覆盖默认映射
+     *
      * @return 公共错误码精确映射、业务错误码默认 400 的映射器
      */
-    @Bean
+    @Bean("aspenErrorCodeStatusMapper")
+    @ConditionalOnMissingBean(AspenErrorCodeStatusMapper::class)
     fun aspenErrorCodeStatusMapper(): AspenErrorCodeStatusMapper = AspenErrorCodeStatusMapper()
 
     /**
      * 注册统一异常渲染
      *
+     * 业务声明同类型 Bean (或组件扫描直接拾取带 @RestControllerAdvice 的本类) 即覆盖,
+     * 条件注解同时防止双注册
+     *
      * @param statusMapper 错误码状态映射器
      * @return 渲染 RFC 9457 Problem Details 的全局异常处理器
      */
-    @Bean
+    @Bean("aspenWebExceptionHandler")
+    @ConditionalOnMissingBean(AspenWebExceptionHandler::class)
     fun aspenWebExceptionHandler(statusMapper: AspenErrorCodeStatusMapper): AspenWebExceptionHandler =
         AspenWebExceptionHandler(statusMapper)
 }

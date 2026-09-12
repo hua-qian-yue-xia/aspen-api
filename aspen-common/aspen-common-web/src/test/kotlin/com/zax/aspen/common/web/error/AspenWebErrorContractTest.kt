@@ -39,6 +39,18 @@ class AspenWebErrorContractTest {
         }
     }
 
+    /** 验证依赖不可用的公共错误码渲染为 503, 锁定高可用语义档位 */
+    @Test
+    fun `dependency unavailable renders service unavailable`() {
+        mockMvc.get("/error/dependency").andExpect {
+            status { isServiceUnavailable() }
+            content { contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON) }
+            jsonPath("$.code") { value("COMMON.DEPENDENCY_UNAVAILABLE") }
+            jsonPath("$.title") { value("依赖服务暂时不可用") }
+            jsonPath("$.traceId") { exists() }
+        }
+    }
+
     /** 验证未登记的业务错误码默认渲染为 400 */
     @Test
     fun `unmapped business code defaults to bad request`() {
@@ -86,6 +98,66 @@ class AspenWebErrorContractTest {
             content { contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON) }
             jsonPath("$.code") { value("COMMON.INVALID_ARGUMENT") }
             jsonPath("$.detail") { value("上报编码不能为空") }
+        }
+    }
+
+    /** 验证 HTTP 方法不支持渲染为 405 而非落入兜底 500 */
+    @Test
+    fun `unsupported method renders method not allowed`() {
+        mockMvc.post("/error/conflict").andExpect {
+            status { isMethodNotAllowed() }
+            content { contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON) }
+            jsonPath("$.code") { value("COMMON.METHOD_NOT_ALLOWED") }
+            jsonPath("$.title") { value("请求方法不支持") }
+            jsonPath("$.traceId") { exists() }
+        }
+    }
+
+    /** 验证不支持的媒体类型渲染为 415 而非落入兜底 500 */
+    @Test
+    fun `unsupported media type renders unsupported media type`() {
+        mockMvc.post("/error/validate") {
+            contentType = MediaType.TEXT_PLAIN
+            content = "plain"
+        }.andExpect {
+            status { isUnsupportedMediaType() }
+            content { contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON) }
+            jsonPath("$.code") { value("COMMON.UNSUPPORTED_MEDIA_TYPE") }
+            jsonPath("$.traceId") { exists() }
+        }
+    }
+
+    /** 验证缺少必填请求参数渲染 400 且 detail 指明参数名 */
+    @Test
+    fun `missing request parameter renders invalid argument`() {
+        mockMvc.get("/error/param").andExpect {
+            status { isBadRequest() }
+            jsonPath("$.code") { value("COMMON.INVALID_ARGUMENT") }
+            jsonPath("$.detail") { value("缺少必填请求参数: page") }
+        }
+    }
+
+    /** 验证请求参数类型不匹配渲染 400 且 detail 指明参数名 */
+    @Test
+    fun `request parameter type mismatch renders invalid argument`() {
+        mockMvc.get("/error/param") {
+            param("page", "abc")
+        }.andExpect {
+            status { isBadRequest() }
+            jsonPath("$.code") { value("COMMON.INVALID_ARGUMENT") }
+            jsonPath("$.detail") { value("请求参数 page 类型不正确") }
+        }
+    }
+
+    /** 验证服务层 @Validated 方法级校验失败聚合渲染 400 */
+    @Test
+    fun `service constraint violation renders invalid argument`() {
+        mockMvc.get("/error/constraint") {
+            param("code", "")
+        }.andExpect {
+            status { isBadRequest() }
+            jsonPath("$.code") { value("COMMON.INVALID_ARGUMENT") }
+            jsonPath("$.detail") { value("查询编码不能为空") }
         }
     }
 }

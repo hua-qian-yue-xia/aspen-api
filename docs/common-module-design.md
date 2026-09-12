@@ -277,7 +277,7 @@ aspen:
 
 包根为 `com.zax.aspen.common.web`。公共 Web 运行约定模块，首版提供受众路径前缀、统一错误契约与 Trace ID：
 
-- `AspenWebProperties`：`aspen.web` 配置绑定，声明管理端、用户端与设备端三组「前缀 + Controller 包匹配规则」，默认值即平台约定，部署可整体改写前缀而不改代码。
+- `AspenWebProperties`：`aspen.web` 配置绑定，声明管理端、用户端与设备端三组「前缀 + Controller 包匹配规则」，默认值即平台约定，部署可整体改写前缀而不改代码；前缀格式错误或三组受众前缀/包规则重复时启动失败。
 - `AspenWebAutoConfiguration`：实现 `WebMvcConfigurer`，在路径映射注册期按 Controller 类的包名给 `@RestController` 统一追加受众前缀；匹配对象是包名（Ant 规则、点号分隔），不是 URL。
 - `trace/TraceId`：Trace ID 常量与生成器——`X-Trace-Id` 请求/响应头、MDC key `traceId`、8 字节 SecureRandom 的 16 位小写十六进制生成；外来值只接受 1-64 位 `[A-Za-z0-9_-]`，防止日志注入。
 - `trace/AspenTraceIdFilter`：请求进入时读 `X-Trace-Id`（合法则复用、非法或缺失则生成），写入 MDC 并回写响应头，请求结束清理 MDC；注册序为最高优先级，覆盖完整请求周期。
@@ -303,6 +303,7 @@ aspen:
 - `biz` 的 Controller 按受众分目录：`controller/admin/{module}`、`controller/app/{module}`、`controller/device/{module}`、`controller/internal/{module}`（见《技术架构》7.5）；契约接口的 `PATH` 常量只写受众后的模块相对路径（如 `/sys/route`），前缀由 Controller 包位置决定，`api` 与 `biz` 都不得在路径常量里硬编码受众前缀。
 - 命中受众规则的映射获得对应前缀，`internal` 及其余包不命中任何规则、不加前缀；internal 端点因此天然保持「不经网关暴露」的定位。
 - 网关按 `/admin-api/**`、`/app-api/**`、`/device-api/**` 原样转发（不配 StripPrefix），服务本体与公开路径完全一致；RBAC 的 `upm_permission_api.path_pattern` 存含前缀的完整公开路径，`application` 列取值即受众标识（`admin-api`/`app-api`/`device-api`）。
+- Admin 的种子路由 `/admin-api/**` 在首个 admin 受众 Controller 落地前是空壳锚点——网关可转发但服务侧无可命中映射（外部调用 404），属预期而非路由失效；原经 `/admin/sys/route` 暴露的路由管理端点已迁 `controller/internal/sys`，按内端定位不再经网关暴露。
 - 模块只在 Spring MVC（servlet）类路径存在时装配；WebFlux 服务引入本模块会静默退避，不注册任何 Bean。spring-webmvc 是内部实现依赖，不经 `api` 传递，使用方自带 `spring-boot-starter-webmvc`。
 
 ### 8.1 统一错误契约
@@ -325,14 +326,15 @@ aspen:
 
 - `title` 取 `ErrorCode.defaultMessage`，`detail` 取 `BusinessException.detail`（必须可安全返回给调用方，敏感诊断只进日志或 `cause`）；`code` 与 `traceId` 是扩展字段，前者是稳定机器错误码，后者用于排查。
 - `type` 在错误文档站真实存在前保持默认 `about:blank`，机器判别一律以 `code` 为准；不凭空发明会漂移的 URI。
-- 状态映射：`INVALID_ARGUMENT`→400、`RESOURCE_NOT_FOUND`→404、`STATE_CONFLICT`→409、`DEPENDENCY_UNAVAILABLE`→503、`INTERNAL_ERROR`→500；未登记的业务错误码默认 400，需要精确状态码时在映射表登记。
-- 参数校验失败（`@Valid` 请求体/方法级校验）、不可读请求体统一映射为 400 `COMMON.INVALID_ARGUMENT`；未匹配路由统一 404 `COMMON.RESOURCE_NOT_FOUND`；兜底异常统一 500 `COMMON.INTERNAL_ERROR` 且 `detail` 只给安全消息，原始异常与堆栈只随 traceId 写日志。
+- 状态映射：`INVALID_ARGUMENT`→400、`METHOD_NOT_ALLOWED`→405、`UNSUPPORTED_MEDIA_TYPE`→415、`RESOURCE_NOT_FOUND`→404、`STATE_CONFLICT`→409、`DEPENDENCY_UNAVAILABLE`→503、`INTERNAL_ERROR`→500；未登记的业务错误码默认 400，需要精确状态码时在映射表登记。
+- 参数校验失败（`@Valid` 请求体、方法级校验、服务层 `@Validated` 的 `ConstraintViolationException`）、不可读请求体、缺少必填请求参数、参数类型不匹配统一映射为 400 `COMMON.INVALID_ARGUMENT`；HTTP 方法不支持映射 405 `COMMON.METHOD_NOT_ALLOWED`（detail 指明被拒绝的方法）、请求媒体类型不支持映射 415 `COMMON.UNSUPPORTED_MEDIA_TYPE`（detail 回显客户端发送的 Content-Type）；未匹配路由统一 404 `COMMON.RESOURCE_NOT_FOUND`；兜底异常统一 500 `COMMON.INTERNAL_ERROR` 且 `detail` 只给安全消息，原始异常与堆栈只随 traceId 写日志。协议级客户端错误必须精确渲染为对应 4xx，不得落入兜底 500。
 
 ### 8.2 Trace ID
 
 - 每个请求一个 traceId：请求头 `X-Trace-Id` 合法则复用（网关或调用方透传），否则服务本地生成；所有响应（成功与失败）都回写 `X-Trace-Id` 响应头，失败 body 的 `traceId` 字段与其一致。
 - 日志关联：filter 把 traceId 写入 MDC，各服务以 `logging.pattern.level` 注入日志模式（Nacos `aspen-common` 统一下发），该请求期间每一行日志都携带同一 traceId；用户报 ID → 按日志 traceId 检索即可还原完整请求链路。
 - 网关最终负责 Trace ID 的建立与跨服务透传（《技术架构》§9）；在其落地前，服务侧「有 header 用 header、无则自生成」的兜底保证单服务直连开发可用，网关能力落地时零改动。
+- 过滤器按同步请求模型设计：`OncePerRequestFilter` 默认跳过异步再分发，引入 `Callable`/`DeferredResult` 等异步 Controller 前，完成线程与再分发阶段的 MDC 将无 traceId，届时须覆写 `shouldNotFilterAsyncDispatch` 或另行改造。
 
 首版不提供 `R<T>` 包装、参数校验增强或 Trace 传播（W3C traceparent/Micrometer Tracing）；Problem Details 的 `type` 指向错误文档站、以及 Trace 上下文跨服务延续，在对应基础设施建立后再纳入本模块。
 
@@ -357,8 +359,8 @@ Testcontainers 的 JUnit Jupiter 和 MySQL 依赖别名已经登记在版本目�
 1. core 编译类路径不包含 Spring、Jimmer 或 Redis。
 2. common 不依赖任何 service，database/cache 不互相依赖，gateway 不依赖 database，gateway-contract 编译类路径不包含 Spring、Jackson 或 Redis。
 3. 公共 Jimmer 映射接口能够被测试 Entity 组合继承并通过 KSP，Jimmer 元数据能识别乐观锁和逻辑删除。
-4. 非法分页、批次、Cache、TTL、Key、业务组白名单和大小配置启动失败。
-5. 用户提供的 Clock、数据库限制、审计拦截器、CacheManager、RedisTemplate 或 CacheOperations 可以覆盖默认 Bean。
+4. 非法分页、批次、Cache、TTL、Key、业务组白名单、大小和 Web 受众前缀配置启动失败。
+5. 用户提供的 Clock、数据库限制、审计拦截器、CacheManager、RedisTemplate、CacheOperations、Trace ID 过滤器、错误码状态映射器或统一异常渲染器可以覆盖默认 Bean。
 6. 未声明 Cache 默认不可创建，Redis 故障不会被公共层吞掉。
 7. 完整 Gradle `check` 与 Admin 启动测试通过。
 8. `controller/admin`、`controller/app` 与 `controller/device` 包下的 `@RestController` 映射分别携带 `/admin-api`、`/app-api`、`/device-api` 前缀，`internal` 及其余包不加前缀；前缀可经 `aspen.web.*` 配置整体覆盖。

@@ -6,6 +6,7 @@ import com.zax.aspen.task.api.dto.TaskPageQuery
 import com.zax.aspen.task.api.dto.TaskSaveDTO
 import com.zax.aspen.task.api.dto.TaskStatusUpdateDTO
 import com.zax.aspen.task.api.dto.TaskTriggerDTO
+import com.zax.aspen.task.api.vo.TaskExecutionLogVO
 import com.zax.aspen.task.api.vo.TaskExecutionVO
 import com.zax.aspen.task.api.vo.TaskVO
 import jakarta.validation.Valid
@@ -141,6 +142,17 @@ interface TaskApi {
     fun retryExecution(
         @PathVariable("executionId") executionId: String,
     )
+
+    /**
+     * 查询逻辑执行的过程日志, 按 seq 升序返回完整走向
+     *
+     * @param executionId 逻辑执行唯一标识
+     * @return 过程日志列表, 无回传日志或执行已过保留期时返回空列表
+     */
+    @GetMapping("$PATH/execution/{executionId}/log")
+    fun executionLogs(
+        @PathVariable("executionId") executionId: String,
+    ): List<TaskExecutionLogVO>
 
     companion object {
         /** 管理端点路径前缀, 受众前缀 /admin-api 由 Controller 包位置决定, 此处只写相对路径 */

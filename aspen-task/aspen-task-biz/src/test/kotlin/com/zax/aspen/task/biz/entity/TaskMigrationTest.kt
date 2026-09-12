@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
  * 验证 Task 迁移脚本覆盖完整表集和关键数据库约束
  */
 class TaskMigrationTest {
-    /** 验证业务迁移按依赖顺序创建 3 张 Task 表并使用统一字符集 */
+    /** 验证业务迁移按依赖顺序创建 3 张核心 Task 表并使用统一字符集 */
     @Test
     fun `creates the complete task schema`() {
         val tableNames = Regex("CREATE TABLE `([^`]+)`", RegexOption.IGNORE_CASE)
@@ -90,6 +90,17 @@ class TaskMigrationTest {
         assertTrue(quartzSchemaSql.contains("org/quartz/impl/jdbcjobstore/tables_mysql_innodb.sql"), "缺少上游来源标注")
     }
 
+    /** 验证执行日志表承载回传幂等: (executionId, seq) 唯一且不声明删除审计 */
+    @Test
+    fun `execution log table keeps idempotent append semantics`() {
+        assertTrue(executionLogSchemaSql.contains("`uk_task_execution_log_execution_seq`"), "缺少 (execution_id, seq) 唯一键")
+        assertFalse(
+            Regex("^\\s*`deleted_at`", RegexOption.MULTILINE).containsMatchIn(executionLogSchemaSql),
+            "日志表是追加型过程数据, 不应声明 deleted_at",
+        )
+        assertEquals(1, Regex("COLLATE = utf8mb4_0900_ai_ci", RegexOption.IGNORE_CASE).findAll(executionLogSchemaSql).count())
+    }
+
     /**
      * 提取指定表的建表语句体
      *
@@ -111,6 +122,9 @@ class TaskMigrationTest {
     /** 从测试类路径读取 Quartz 运行时表迁移脚本 */
     private val quartzSchemaSql: String by lazy { migrationSql(QUARTZ_MIGRATION_RESOURCE) }
 
+    /** 从测试类路径读取执行日志表迁移脚本 */
+    private val executionLogSchemaSql: String by lazy { migrationSql(EXECUTION_LOG_MIGRATION_RESOURCE) }
+
     /**
      * 读取指定迁移资源全文
      *
@@ -127,5 +141,8 @@ class TaskMigrationTest {
 
         /** Quartz 运行时表的初始迁移版本 */
         const val QUARTZ_MIGRATION_RESOURCE = "/db/migration/V002__create_quartz_schema.sql"
+
+        /** 执行过程日志表的迁移版本 */
+        const val EXECUTION_LOG_MIGRATION_RESOURCE = "/db/migration/V003__create_task_execution_log.sql"
     }
 }
