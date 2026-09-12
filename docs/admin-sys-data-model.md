@@ -6,7 +6,7 @@
 
 ## 1. 目标与来源
 
-Admin SYS 使用 Jimmer 建模字典、运行参数与网关路由, 首版覆盖 4 张表, 代码位于:
+Admin SYS 使用 Jimmer 建模字典、运行参数与网关路由, 首版覆盖 4 张表; 统一认证批次追加 `sys_auth_client` 与 `sys_auth_login_method` 两张认证配置表 (V006, 结构与语义权威在《认证数据模型》, 本文不重复展开), 代码位于:
 
 ```text
 services/aspen-admin/aspen-admin-biz/src/main/kotlin/com/zax/aspen/admin/biz/entity/sys/
@@ -25,6 +25,8 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/sys/
 | 字典 | `sys_dict_item` | 字典项值、显示文本、层级关系和前端展示属性 |
 | 参数 | `sys_config` | 租户级参数键值、类型声明、内置与敏感标记 |
 | 路由 | `sys_route` | 网关动态路由定义、断言与过滤器、匹配顺序和启停状态 |
+| 认证 | `sys_auth_client` | 端注册与机器密钥摘要（权威见 [认证数据模型](./auth-data-model.md)） |
+| 认证 | `sys_auth_login_method` | 端×登录方式策略：认证方式、验证码闸门、密码策略（权威见 [认证数据模型](./auth-data-model.md)） |
 
 ## 3. Jimmer 映射约定
 

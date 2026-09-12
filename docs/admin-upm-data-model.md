@@ -1,8 +1,8 @@
 # Admin UPM 数据模型
 
-> 文档状态：首版 24 张表 Entity 与版本化 Schema 已实现，对象关联已按迁移外键全量声明（见 3 节），Controller/Service 待建  
-> 文档基线：2026-09-12  
-> 关联文档：[技术架构](./technical-architecture.md)｜[Common 模块设计](./common-module-design.md)
+> 文档状态：首版 24 张表 Entity 与版本化 Schema 已实现，对象关联已按迁移外键全量声明（见 3 节），Controller/Service 待建；`upm_user_session` 与 `upm_login_log` 已随统一认证批次降级废弃（刷新会话与登录审计权威移交 `aspen_auth` Schema，见《认证数据模型》）  
+> 文档基线：2026-09-13  
+> 关联文档：[技术架构](./technical-architecture.md)｜[Common 模块设计](./common-module-design.md)｜[认证数据模型](./auth-data-model.md)
 
 ## 1. 目标与来源
 
@@ -38,10 +38,10 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/upm/
 | 权限 | `upm_role_permission` | 角色到后端权限授权 |
 | 权限 | `upm_menu_permission` | 菜单或按钮到后端权限映射 |
 | 权限 | `upm_user_permission` | 用户直接允许或拒绝某项权限 |
-| 安全 | `upm_user_session` | 刷新令牌摘要、设备和会话生命周期 |
+| 安全 | `upm_user_session` | ~~刷新令牌摘要、设备和会话生命周期~~ 已降级废弃：跨端会话权威移交 `aspen_auth.auth_session`，本表保留结构不再写入 |
 | 安全 | `upm_user_mfa` | TOTP、WebAuthn 等多因素认证方式 |
 | 安全 | `upm_password_history` | 密码历史摘要 |
-| 审计 | `upm_login_log` | 不可变登录审计记录 |
+| 审计 | `upm_login_log` | ~~不可变登录审计记录~~ 已降级废弃：登录审计权威移交 `aspen_auth.auth_login_log`，本表保留结构不再写入 |
 | 审计 | `upm_authorization_change_log` | 不可变授权变更快照 |
 
 ## 3. Jimmer 映射约定

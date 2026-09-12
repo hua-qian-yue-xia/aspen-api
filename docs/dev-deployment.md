@@ -31,14 +31,14 @@ docker compose -f deploy/docker-compose.yml up -d
 
 ## 4. 服务与地址
 
-端口方案（容器内外一致, 2026-09-06 起）：MySQL=6100 / Redis=6200 / Nacos 主 API=6300。业务服务端口走 7x00 段递增：admin-biz=7100、storage-biz=7200、task-biz=7400（`application.yaml` 直配, 不进配置中心；7300 被 Nacos 客户端 gRPC 自动占用, 业务服务跳过不分配）; 6x00 段专属基础设施, 业务服务不占用。
+端口方案（容器内外一致, 2026-09-06 起）：MySQL=6100 / Redis=6200 / Nacos 主 API=6300。业务服务端口走 7x00 段递增：admin-biz=7100、storage-biz=7200、task-biz=7400、auth-biz=7500（`application.yaml` 直配, 不进配置中心；7300 被 Nacos 客户端 gRPC 自动占用, 业务服务跳过不分配）; 6x00 段专属基础设施, 业务服务不占用。Gateway 是外部流量唯一入口, 部署在入口负载均衡之后, 本地直连端口 7000（同段最前, 见《技术架构》15.1）。
 
 | 服务 | 地址 | 说明 |
 | --- | --- | --- |
 | Nacos 控制台 | `http://localhost:8080` | Nacos 3.x 控制台独立端口, 保持默认 8080 不入 6x00 段 |
 | Nacos 主 API | `localhost:6300` | 客户端 `server-addr` 指向这里, gRPC 自动走主端口+1000 = 7300 |
 | Redis | `localhost:6200` | 开发缓存实例（网关动态路由版本信封等）, AOF 持久化, 无密码仅限开发 |
-| MySQL | `localhost:6100` | 开发共享实例, 当前只建 `aspen_nacos_config` 库; `nacos` 账号仅授权该库 |
+| MySQL | `localhost:6100` | 开发共享实例, `nacos` 账号仅授权 `aspen_nacos_config` 库; 业务库 (`aspen_admin`/`aspen_storage`/`aspen_task`/`aspen_auth`) 部署侧手工创建 |
 
 7300 对宿主机暴露（IDE 直连运行的本地服务需要 gRPC）；console 8080 与节点间端口（7848 等）按默认仅在 compose 网络内开放。容器间互访用服务名 + 同端口：`mysql:6100`、`redis:6200`、`nacos:6300`。
 
@@ -51,6 +51,10 @@ docker compose -f deploy/docker-compose.yml up -d
 | `NACOS_ADMIN_PASSWORD` | Nacos 管理员与客户端账号 `nacos` 的密码, 首启由种子脚本经 `POST /nacos/v3/auth/user/admin` 初始化 | 必须更换为强密码 |
 | `NACOS_AUTH_TOKEN` | 服务端 JWT 签名密钥 (base64, 原文 ≥32 字节) | 必须更换 |
 | `NACOS_AUTH_IDENTITY_KEY` / `NACOS_AUTH_IDENTITY_VALUE` | Nacos 节点间身份标识 | 必须更换 |
+| `ASPEN_AUTH_JWT_PRIVATE_KEY` / `ASPEN_AUTH_JWT_KEY_ID` | Auth 的 JWT 签名私钥 (PKCS#8 base64) 与密钥标识, 公钥经 JWKS 分发 | 必须注入, 不得进 Nacos 与仓库 |
+| `ASPEN_GATEWAY_INTERNAL_SECRET` | Gateway 注入内部身份头时的信任凭据, 与各 biz 侧环境值一致 | 必须注入 |
+| `ASPEN_AUTH_CAPTCHA_ID` / `ASPEN_AUTH_CAPTCHA_SECRET` | 三方行为验证码凭据 (SLIDER 闸门); 本地降级用 NONE 时可不配 | 必须注入 |
+| `ASPEN_UPM_BOOTSTRAP_ADMIN_PASSWORD` | Admin 超管 bootstrap 初始密码 (启动时建号, 只在不存在时生效) | 必须注入 |
 
 规则：`.env` 不入库（已加 `.gitignore`）；应用配置里只允许出现开发默认值（如 `application.yaml` 的 `${NACOS_PASSWORD:aspen-dev-admin}`），生产凭据一律经环境变量或 Docker Secret 注入，密码、私钥等敏感配置内容禁止进入 Nacos 普通配置（架构测试强制）。
 
@@ -67,6 +71,7 @@ docker compose -f deploy/docker-compose.yml up -d
 | `aspen-gateway-local.yaml` | Gateway 占位, 待网关接入配置中心后填充 |
 | `aspen-storage-biz-local.yaml` | Storage 本地配置, 当前为占位种子; 数据源与 Jimmer 运行配置待服务接入数据库后填充 |
 | `aspen-task-biz-local.yaml` | Task 本地配置, 当前为占位种子; 任务服务的租户来源地址、HTTP 目标白名单与 Quartz 集群配置待部署接线后填充 |
+| `aspen-auth-biz-local.yaml` | Auth 本地配置, 当前为占位种子; 数据源 (`aspen_auth` 库) 与验证码闸门配置随认证批次填充 |
 
 种子策略：**只补缺失**——每次 `up` 时先 `GET /nacos/v3/admin/cs/config` 查存在，404 才 `POST` 发布；控制台手工修改不会被覆盖。`FORCE_SEED=1 docker compose ... up` 强制以 Git 文件覆盖全部 dataId。修改种子文件后想生效：删除对应 dataId 或使用 FORCE_SEED。
 

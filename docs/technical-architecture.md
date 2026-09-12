@@ -689,11 +689,11 @@ Admin 首期业务组边界建议为：
 
 Auth 与 Admin/UPM 的边界固定为：
 
-- `aspen-auth-biz` 拥有登录协议、认证编排、Token 签发与刷新、客户端认证、服务身份和密钥生命周期。
-- `admin/upm` 拥有用户资料、租户、组织、角色、菜单、权限，以及凭证摘要、外部身份、MFA、会话、密码历史和登录审计的权威持久化数据。
-- Auth 通过 `aspen-admin-api` 中 `upm` 业务组的契约访问 UPM 身份与安全状态，不得复制第二份用户、角色、权限、凭证或会话数据表。
-- `upm_user_credential`、`upm_user_session` 等表归 UPM 不表示 Admin 负责 Token 协议或密钥生成；表所有权与认证流程所有权必须分开。
-- 短期缓存可以存在，但不能演变为 Auth 与 UPM 两套权威数据源。
+- `aspen-auth-biz` 拥有登录协议、认证编排、Token 签发与刷新、客户端认证、服务身份和密钥生命周期，并拥有跨端刷新会话（`auth_session`）与登录审计（`auth_login_log`）的权威持久化数据。
+- 主体数据按端拆分：`admin/upm` 拥有管理端用户资料、租户、组织、角色、菜单、权限、凭证摘要、外部身份、MFA 与密码历史；未来的 app 用户域、设备注册表各自拥有本域主体与凭据。Auth 自身不建立第二套用户、凭证或权限数据。
+- Auth 经 `aspen-auth-api` 的 Principal SPI（`AuthPrincipalApi`）按端访问各用户域（管理端实现位于 `aspen-admin-biz`），不得直连任何用户域的表，也不得复制其数据。
+- 凭证表（如 `upm_user_credential`）归用户域不表示用户域负责 Token 协议或密钥生成；主体凭据所有权与认证流程所有权必须分开。
+- 短期缓存可以存在，但不能演变为 Auth 与各用户域之间的两套权威数据源。
 
 #### 7.10.4 业务组间依赖
 
@@ -1104,17 +1104,22 @@ Quartz Cluster 只能协调“哪个调度实例获得 Trigger”，不能承诺
 
 ### 14.2 Spring Security
 
-- `aspen-auth-biz` 负责登录协议、认证编排、客户端与服务身份、令牌签发和密钥生命周期；用户、权限、凭证摘要、MFA 和会话的权威持久化数据归 Admin UPM。
-- Auth 只能通过 Admin UPM 契约读取或变更身份安全状态，不直接访问 `upm_*` 表，也不建立第二套凭证、会话或权限数据。
-- Gateway 使用 Spring Security 校验外部令牌，完成登录态、公开路径和路由级权限判断，并覆盖客户端传入的内部身份 Header。
-- 普通业务仓库不创建私有 `security` 包，不重复实现 Token 解析、JWT 验签、权限缓存或 Spring Security 配置。
-- `aspen-common-security` 以自动配置方式为业务进程提供最小安全过滤链：验证 Gateway 或服务身份、建立只读安全上下文、拒绝伪造身份和保护管理端点。
+统一认证采用三层模型。**端注册**（`sys_auth_client`）定义调用方：端编码、端类型、机器端密钥摘要与令牌 TTL；**端×登录方式策略**（`sys_auth_login_method`）定义每个端允许的认证方式、验证码闸门与密码生命周期策略；**主体凭据**归各端用户域——管理端是 Admin UPM，未来的 app 用户域与设备注册表各自持有本域主体与凭据。前两层是平台级配置（全体租户共用），权威源在 Admin SYS，经版本信封 + Pub/Sub 快照分发（14.4 分发原语语义），Auth 只读消费；表结构权威见《认证数据模型》。
+
+- 认证引擎只有一条主干：**找主体（用户/设备/合作方）→ 验凭据 → 发令牌**。设备密钥、合作方客户端密钥与用户密码同构，都是「主体 + 静态凭据」的密码登录泛化，不为任何端单独发明认证流程。策略表里存的全是选择器（用哪种验证码、是否允许该方式、要不要强制改密），协议步骤本身（验证码怎么实现、微信 OAuth 怎么交换）是 Auth 内按方式枚举实现的代码，不数据驱动。
+- Auth 经 `aspen-auth-api` 的 `AuthPrincipalApi` SPI 访问用户域，操作固定三个：`verifyPassword`（密码登录与锁定判定）、`resolveByIdentity`（第三方身份查找或按策略建号）、`getPrincipal`（刷新令牌时复查主体状态）。按端的 `client_kind` 路由到对应实现；v1 只有 Admin UPM 一个实现，新增用户域只加实现和路由项，不改引擎。
+- 第三方登录（管理端微信扫一扫、app 微信一键登录、Apple 登录等）由 Auth 编排与外部身份提供方的协议交换（code 换 openid、identity_token 验签），openid↔主体的绑定关系存储在各用户域（管理端为 `upm_user_identity`）。管理端第三方登录只认已绑定账号、绝不自动注册；app 端按方式策略 find-or-create，以身份唯一键幂等建号。
+- 刷新会话与登录日志归 Auth Schema（`auth_session`、`auth_login_log`），跨端统一吊销、设备管理与审计。刷新令牌一次性轮换；登出即吊销会话，访问令牌短 TTL 自然过期，不建黑名单。UPM 的 `upm_user_session`、`upm_login_log` 降级废弃。
+- Gateway 使用 Spring Security 校验外部令牌（JWT 验签密钥经 Auth 的 JWKS 分发），完成公开路径放行与 claim↔前缀校验（令牌 `client_kind` 声明与 `/admin-api`、`/app-api`、`/device-api` 前缀必须匹配），并剥离外部传入的 `X-Aspen-*` 内部身份头后按令牌重新注入，网关身份与信任凭据随内部头透传给业务进程。
+- 普通业务仓库不创建私有 `security` 包，不重复实现 Token 解析、JWT 验签、权限缓存或 Spring Security 配置；`aspen-auth-biz` 是唯一允许 `security` 包的运行时（架构测试白名单）。
+- `aspen-common-security` 以自动配置方式为业务进程提供最小安全过滤链：验证 Gateway 身份、建立只读安全上下文、拒绝伪造身份和保护管理端点；并把请求中的租户与身份上下文装配给 common-database。
 - 业务 Service 只处理必须查询业务数据才能判断的权限，例如资源所有权、组织数据范围和当前状态是否允许操作；这些属于业务规则，Gateway 无法可靠代替。
 - 业务服务端口只能开放在受控内网，外部流量必须经过 Gateway；但网络隔离不能替代身份校验。
 - 服务间系统行为使用独立短期服务身份，不能长期冒用用户令牌。
 - `401` 表示未认证，`403` 表示无权限，不能包装为业务成功响应。
-- 租户上下文由 Gateway/Auth 校验令牌后确定并随内部 Header 透传，业务进程通过 `TenantContextSupplier` 从安全上下文装配给 common-database；租户查询与保存 fail-closed，缺失上下文即拒绝，跨租户操作必须使用显式系统上下文并保留审计。
-- Gateway/Auth 记录认证失败、路由授权失败、密钥变更和高风险管理操作；业务 Service 记录资源级越权拒绝。
+- 租户上下文由 Gateway 校验令牌后确定并随内部 Header 透传，业务进程通过 `aspen-common-security` 从请求上下文装配 `TenantContextSupplier` 给 common-database；租户查询与保存 fail-closed，缺失上下文即拒绝，跨租户操作必须使用显式系统上下文并保留审计。
+- JWT 签名私钥、微信/Apple 应用凭据与三方验证码凭据只从环境变量或密钥服务注入，不进 Nacos 普通配置与代码仓库；种子数据与测试不得包含可用凭据字面量。
+- Auth 记录认证成功与失败（`auth_login_log`），Gateway 记录路由授权失败与密钥变更，业务 Service 记录资源级越权拒绝。
 
 如果完全移除业务进程的身份校验，任何能够访问业务容器端口的内部主机或被攻陷服务都可以绕过 Gateway 并伪造用户 Header。为此，本架构移除的是业务服务私有安全实现和目录，而不是业务进程的最小信任边界。
 
