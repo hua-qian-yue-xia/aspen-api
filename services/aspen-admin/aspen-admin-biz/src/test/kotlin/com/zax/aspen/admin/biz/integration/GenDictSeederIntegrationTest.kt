@@ -39,29 +39,37 @@ import kotlin.test.assertNull
     ],
 )
 class GenDictSeederIntegrationTest {
-    /** 验证上下文启动播种已写入三个通用字典及其项 */
+    /** 验证上下文启动播种已写入通用与认证字典及其项 */
     @Test
     @Order(1)
     fun `seeds common dicts on startup`() {
         assertEquals(
-            listOf("enabled_status", "gender", "risk_level"),
+            listOf(
+                "auth_captcha_kind",
+                "auth_client_kind",
+                "auth_login_method",
+                "auth_principal_status",
+                "enabled_status",
+                "gender",
+                "risk_level",
+            ),
             queryStrings("SELECT dict_code FROM sys_dict ORDER BY dict_code"),
         )
         assertEquals(
-            listOf("common", "common", "common"),
+            listOf("auth", "auth", "auth", "auth", "common", "common", "common"),
             queryStrings("SELECT dict_group FROM sys_dict ORDER BY dict_code"),
         )
         assertEquals(
-            listOf("1", "1", "1"),
+            listOf("1", "1", "1", "1", "1", "1", "1"),
             queryStrings("SELECT is_built_in FROM sys_dict ORDER BY dict_code"),
         )
         assertEquals(
-            listOf("启停状态", "性别", "风险等级"),
+            listOf("验证码闸门", "认证端类型", "登录方式", "认证主体状态", "启停状态", "性别", "风险等级"),
             queryStrings("SELECT dict_name FROM sys_dict ORDER BY dict_code"),
         )
 
-        // 字典项总数: enabled_status 2 + gender 4 + risk_level 4
-        assertEquals("10", queryString("SELECT COUNT(*) FROM sys_dict_item"))
+        // 字典项总数: 认证域 3+4+5+3 + 通用域 2+4+4
+        assertEquals("25", queryString("SELECT COUNT(*) FROM sys_dict_item"))
         assertEquals(
             listOf("未知", "男", "女", "不适用"),
             queryStrings(
@@ -117,8 +125,8 @@ class GenDictSeederIntegrationTest {
     fun `reseeding create missing keeps counts stable`() {
         genDictSeeder.seed(genDictCatalog.descriptors, AspenGenProperties.Dict.Mode.CREATE_MISSING)
 
-        assertEquals("3", queryString("SELECT COUNT(*) FROM sys_dict"))
-        assertEquals("10", queryString("SELECT COUNT(*) FROM sys_dict_item"))
+        assertEquals("7", queryString("SELECT COUNT(*) FROM sys_dict"))
+        assertEquals("25", queryString("SELECT COUNT(*) FROM sys_dict_item"))
     }
 
     /** 验证 create-missing 不覆盖运营对展示属性的修改 */

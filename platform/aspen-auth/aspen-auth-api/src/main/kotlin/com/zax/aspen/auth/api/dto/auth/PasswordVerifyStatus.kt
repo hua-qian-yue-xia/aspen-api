@@ -17,5 +17,8 @@ enum class PasswordVerifyStatus {
     BAD_CREDENTIALS,
 
     /** 主体处于锁定窗口 (如失败次数超限), 拒绝且不计入新一轮失败 */
-    LOCKED
+    LOCKED,
+
+    /** 主体被禁用 (用户状态非启用), 拒绝登录与刷新 */
+    DISABLED
 }

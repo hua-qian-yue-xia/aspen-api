@@ -2,8 +2,11 @@ package com.zax.aspen.admin.biz.repository.upm
 
 import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.admin.biz.entity.upm.UpmTenantEntity
+import com.zax.aspen.admin.biz.entity.upm.UpmTenantEntityDraft
 import com.zax.aspen.admin.biz.entity.upm.status
+import com.zax.aspen.admin.biz.entity.upm.tenantCode
 import com.zax.aspen.admin.biz.entity.upm.tenantId
+import org.babyfish.jimmer.sql.ast.mutation.SaveMode
 import org.babyfish.jimmer.sql.kt.KSqlClient
 import org.babyfish.jimmer.sql.kt.ast.expression.asc
 import org.babyfish.jimmer.sql.kt.ast.expression.eq
@@ -37,4 +40,36 @@ class UpmTenantRepository(
             val validTo = tenant.validTo
             (validFrom == null || !validFrom.isAfter(now)) && (validTo == null || validTo.isAfter(now))
         }
-}
+
+    /**
+     * 按租户编码查找未删除租户
+     *
+     * @param tenantCode 租户编码, 全局唯一
+     * @return 匹配的租户实体, 不存在或已逻辑删除时返回 `null`
+     */
+    fun findByCode(tenantCode: String): UpmTenantEntity? =
+        sqlClient.createQuery(UpmTenantEntity::class) {
+            where(table.tenantCode eq tenantCode)
+            select(table)
+        }.fetchOneOrNull()
+
+    /**
+     * 新增租户, 显式 INSERT_ONLY, 供超管 bootstrap 建立平台租户
+     *
+     * @param tenantCode 租户编码, 全局唯一
+     * @param name 租户完整名称
+     * @param identity 操作人身份标识, 写入 createdBy 与 updatedBy 审计列
+     * @return 落库后的租户实体, 含数据库生成的 id
+     */
+    fun insert(tenantCode: String, name: String, identity: String): UpmTenantEntity =
+        sqlClient.entities.save(
+            UpmTenantEntityDraft.`$`.produce {
+                this.tenantCode = tenantCode
+                this.name = name
+                version = 1
+                createdBy = identity
+                updatedBy = identity
+            },
+        ) {
+            setMode(SaveMode.INSERT_ONLY)
+        }.modifiedEntity}

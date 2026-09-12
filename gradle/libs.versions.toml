@@ -32,6 +32,9 @@ spring-boot-starter-security-test = { module = "org.springframework.boot:spring-
 # common-web 的装配内部实现依赖, 版本由本模块 api(platform(spring-boot-dependencies)) 约束
 spring-webmvc = { module = "org.springframework:spring-webmvc" }
 
+# 密码摘要 (BCrypt) 单依赖: 只取 crypto, 不引入完整 Spring Security 过滤链; 版本由 Boot 平台约束
+spring-security-crypto = { module = "org.springframework.security:spring-security-crypto" }
+
 # Spring Cloud: Gateway 只能用于独立网关模块, 业务服务使用 OpenFeign + LoadBalancer
 spring-cloud-starter-gateway = { module = "org.springframework.cloud:spring-cloud-starter-gateway-server-webflux" }
 spring-cloud-starter-openfeign = { module = "org.springframework.cloud:spring-cloud-starter-openfeign" }

@@ -29,6 +29,12 @@ dependencies {
     implementation(project(AspenProjects.ADMIN_API))
     implementation(project(AspenProjects.COMMON_DATABASE))
     implementation(project(AspenProjects.COMMON_GEN))
+    // 认证主体 SPI (AuthPrincipalApi) 的管理端实现: Admin 拥有 UPM 用户域, Auth 登录链路经本契约取主体判定
+    implementation(project(AspenProjects.AUTH_API))
+    // 客户端配置快照发布 (取号/守卫落盘/通知) 由 common-security 提供, Admin 只负责 sys 两表读取与行转换
+    implementation(project(AspenProjects.COMMON_SECURITY))
+    // 密码摘要 (BCrypt) 供主体服务比对与超管 bootstrap 建号编码, 只取 crypto 不引入安全过滤链
+    implementation(libs.spring.security.crypto)
 
     // 当前阶段只提供可编译, 可启动的最小 MVC 运行时, 不提前引入未使用的基础设施
     implementation(libs.spring.boot.starter.webmvc)

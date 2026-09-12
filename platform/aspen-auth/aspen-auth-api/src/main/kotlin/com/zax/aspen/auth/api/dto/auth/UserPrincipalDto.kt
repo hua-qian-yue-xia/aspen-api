@@ -18,6 +18,8 @@ data class UserPrincipalDto(
     val status: PrincipalStatus,
     /** 所属租户标识, 管理端主体必填; C 端主体为 null */
     val tenantId: Long?,
-    /** 是否需要强制修改密码: 首登策略或密码过期触发, 登录回执携带改密动作 */
+    /** 是否需要强制修改密码: 用户域标记 (首登策略), 端×方式的密码有效期策略由 Auth 结合 passwordChangedAt 计算 */
     val mustChangePassword: Boolean,
+    /** 密码最近变更时间, null 表示从未变更 (按最严格策略处理); 供 Auth 计算密码过期 */
+    val passwordChangedAt: java.time.LocalDateTime?,
 )

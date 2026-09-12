@@ -36,6 +36,28 @@ class TenantFilterTest {
         assertFailsWith<IllegalStateException> { filter.filter(args) }
     }
 
+    /** 验证显式系统上下文内不追加租户条件, 声明了审计动机的跨租户读放行 */
+    @Test
+    fun `skips tenant predicate inside explicit system context`() {
+        val args = mockArgs()
+        val filter = TenantFilter { null }
+
+        TenantSystemContext.runAsSystem("tenant-filter-test") { filter.filter(args) }
+
+        Mockito.verify(args, Mockito.never()).where(Mockito.any(Predicate::class.java))
+    }
+
+    /** 验证系统上下文结束后恢复 fail-closed, 缺失租户上下文再次拒绝查询 */
+    @Test
+    fun `restores fail closed after system context ends`() {
+        val args = mockArgs()
+        val filter = TenantFilter { null }
+
+        TenantSystemContext.runAsSystem("tenant-filter-test") { filter.filter(args) }
+
+        assertFailsWith<IllegalStateException> { filter.filter(args) }
+    }
+
     /**
      * 构造 eq(42L) 命中时返回指定条件的租户属性表达式 mock
      *
