@@ -1,10 +1,12 @@
 package com.zax.aspen.common.cache.support
 
 import com.zax.aspen.common.core.error.CommonErrorCode
+import org.mockito.ArgumentMatchers
 import org.mockito.Mockito
 import org.springframework.data.redis.RedisConnectionFailureException
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
+import org.springframework.data.redis.core.script.RedisScript
 import org.springframework.data.redis.listener.ChannelTopic
 import org.springframework.data.redis.listener.RedisMessageListenerContainer
 import java.nio.charset.StandardCharsets
@@ -88,7 +90,80 @@ class AspenRedisOperationsTest {
     fun `illegal key and channel names are rejected`() {
         assertFailsWith<IllegalArgumentException> { operations.getValue("bad key with space") }
         assertFailsWith<IllegalArgumentException> { operations.publish("bad channel", "1") }
+        assertFailsWith<IllegalArgumentException> {
+            operations.setValueIfNewer("bad key with space", """{"version":1}""", "aspen:local:gateway:routes:refresh")
+        }
+    }
+
+    @Test
+    fun `setValueIfNewer delegates to lua script and maps adopted reply`() {
+        Mockito.`when`(
+            stringRedisTemplate.execute(
+                ArgumentMatchers.any<RedisScript<Long>>(),
+                eqList(listOf("aspen:local:gateway:routes")),
+                eqText("""{"version":7}"""),
+                eqText("aspen:local:gateway:routes:refresh"),
+            ),
+        ).thenReturn(1L)
+
+        assertEquals(
+            true,
+            operations.setValueIfNewer("aspen:local:gateway:routes", """{"version":7}""", "aspen:local:gateway:routes:refresh"),
+        )
+    }
+
+    @Test
+    fun `setValueIfNewer maps rejected and null replies to false`() {
+        Mockito.`when`(
+            stringRedisTemplate.execute(
+                ArgumentMatchers.any<RedisScript<Long>>(),
+                ArgumentMatchers.anyList(),
+                ArgumentMatchers.any(),
+                ArgumentMatchers.any(),
+            ),
+        ).thenReturn(0L, null)
+
+        assertEquals(
+            false,
+            operations.setValueIfNewer("aspen:local:gateway:routes", """{"version":6}""", "aspen:local:gateway:routes:refresh"),
+        )
+        assertEquals(
+            false,
+            operations.setValueIfNewer("aspen:local:gateway:routes", """{"version":6}""", "aspen:local:gateway:routes:refresh"),
+        )
+    }
+
+    @Test
+    fun `setValueIfNewer wraps script failures as cache access exception`() {
+        Mockito.`when`(
+            stringRedisTemplate.execute(
+                ArgumentMatchers.any<RedisScript<Long>>(),
+                ArgumentMatchers.anyList(),
+                ArgumentMatchers.any(),
+                ArgumentMatchers.any(),
+            ),
+        ).thenThrow(RedisConnectionFailureException("redis unavailable"))
+
+        assertFailsWith<CacheAccessException> {
+            operations.setValueIfNewer("aspen:local:gateway:routes", """{"version":6}""", "aspen:local:gateway:routes:refresh")
+        }
     }
 
     private val received = mutableListOf<String>()
+
+    /**
+     * eq matcher 的非空字符串包装: Kotlin 非空参数不接受 matcher 返回的 null
+     *
+     * @param value 期望匹配的实参值
+     * @return matcher 登记结果, matcher 返回 null 时回退为原值
+     */
+    private fun eqText(value: String): String = ArgumentMatchers.eq(value) ?: value
+
+    /**
+     * eq matcher 的非空列表包装: Kotlin 非空参数不接受 matcher 返回的 null
+     *
+     * @param value 期望匹配的键列表
+     * @return matcher 登记结果, matcher 返回 null 时回退为原值
+     */
+    private fun eqList(value: List<String>): List<String> = ArgumentMatchers.eq(value) ?: value
 }

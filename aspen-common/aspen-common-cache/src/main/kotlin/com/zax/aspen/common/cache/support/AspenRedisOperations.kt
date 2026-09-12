@@ -5,6 +5,8 @@ import org.springframework.data.redis.connection.MessageListener
 import org.springframework.data.redis.listener.ChannelTopic
 import org.springframework.data.redis.listener.RedisMessageListenerContainer
 import org.springframework.data.redis.core.StringRedisTemplate
+import org.springframework.data.redis.core.script.DefaultRedisScript
+import org.springframework.data.redis.core.script.RedisScript
 import java.nio.charset.StandardCharsets
 
 /**
@@ -57,6 +59,33 @@ class AspenRedisOperations(
     }
 
     /**
+     * 版本守卫发布 (Lua CAS): 解析在途信封与新值的 version 字段, 仅当新版本更大才整键替换并广播
+     *
+     * 版本化快照发布的唯一合法落盘方式: 取号 (INCR) 与 SET 两步之间无原子性, 并发发布时
+     * 旧信封可能在新信封之后落盘, 污染后续冷启动加载 (消费端 isNewer 只保护已加载实例,
+     * 不保护 Redis Key 本身); 本原语把「比较 + 落盘 + 广播」收敛进单条 Lua 脚本原子执行,
+     * 从介质层面杜绝旧盖新; 信封必须是含正数 version 字段的 JSON
+     *
+     * @param key 永久信封键, 格式由使用方契约常量定义并已通过段格式校验
+     * @param value 含 version 字段的新信封 JSON 文本
+     * @param channel 落盘成功后广播的频道, 消息体为新信封的 version 字符串
+     * @return 新版本被采纳落盘时为 `true`, 在途信封版本不旧于新版本 (旧盖新被拒绝) 时为 `false`
+     */
+    fun setValueIfNewer(key: String, value: String, channel: String): Boolean {
+        requireValidName(key, "Key")
+        requireValidName(channel, "频道")
+        return execute("setValueIfNewer") {
+            val adopted = stringRedisTemplate.execute(
+                SET_IF_NEWER_SCRIPT,
+                listOf(key),
+                value,
+                channel,
+            )
+            adopted == 1L
+        }
+    }
+
+    /**
      * 向频道发布通知消息, 消息体为字符串 (通常为版本号)
      *
      * @param channel 目标频道名, 格式由使用方契约常量定义并已通过段格式校验
@@ -105,6 +134,37 @@ class AspenRedisOperations(
     private companion object {
         /** Key 与频道共用的段格式, 与 CacheKey 段规则一致 */
         val NAME_PATTERN = Regex("[A-Za-z0-9][A-Za-z0-9._:-]*")
+
+        /**
+         * 版本守卫落盘脚本: 比较在途信封与新信封的 version 字段, 仅新者更大才 SET 并 PUBLISH
+         *
+         * KEYS[1]=信封键, ARGV[1]=新信封 JSON, ARGV[2]=广播频道; 在途信封缺失、损坏或
+         * version 非法时视为可覆盖 (返回 1), 保证首次发布与介质自愈不被旧脏数据卡死
+         */
+        val SET_IF_NEWER_SCRIPT: RedisScript<Long> = DefaultRedisScript(
+            """
+            local current = redis.call('GET', KEYS[1])
+            if current then
+              local ok, envelope = pcall(cjson.decode, current)
+              if ok and type(envelope) == 'table' then
+                local currentVersion = tonumber(envelope['version'])
+                local okNew, newEnvelope = pcall(cjson.decode, ARGV[1])
+                if okNew and type(newEnvelope) == 'table' then
+                  local newVersion = tonumber(newEnvelope['version'])
+                  if currentVersion and newVersion and currentVersion >= newVersion then
+                    return 0
+                  end
+                else
+                  return redis.error_reply('new envelope version invalid')
+                end
+              end
+            end
+            redis.call('SET', KEYS[1], ARGV[1])
+            redis.call('PUBLISH', ARGV[2], tostring(cjson.decode(ARGV[1])['version']))
+            return 1
+            """.trimIndent(),
+            Long::class.java,
+        )
 
         /**
          * 校验 Key 或频道名符合分发原语的段格式

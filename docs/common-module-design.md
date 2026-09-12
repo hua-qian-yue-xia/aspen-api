@@ -29,7 +29,7 @@ aspen-common-gen      -> aspen-common-core
 aspen-common-gateway-contract -> (零项目依赖)
 aspen-common-gateway  -> aspen-common-cache, aspen-common-gateway-contract
 aspen-common-web      -> aspen-common-core
-aspen-common-security -> aspen-common-core, aspen-common-database, aspen-common-cache, aspen-common-web
+aspen-common-security -> aspen-common-core, aspen-common-database, aspen-common-cache
 ```
 
 `core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；`gateway-contract` 与 `core` 同级，同样零基础设施依赖，因此可被 `api` 安全引用；`gateway` 只依赖 `cache` 取 Redis 分发原语并依赖 `gateway-contract` 承载纯契约，不依赖 `database`；`web` 承载 MVC 运行约定（受众路径前缀、错误契约、Trace ID），只依赖 `core` 的错误契约类型；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。

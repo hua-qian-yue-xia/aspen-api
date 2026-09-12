@@ -118,7 +118,7 @@ dependencyResolutionManagement {
 rootProject.name = "aspen"
 
 // Admin 与 Storage 是业务微服务, 由普通契约 JAR 和唯一可运行 Biz 模块组成, 归 services/;
-// Gateway 与 Task 是平台级基建服务 (统一入口网关与 Quartz 集群唯一运行时), 归 platform/;
+// Gateway、Task 与 Auth 是平台级基建服务 (统一入口网关、Quartz 集群唯一运行时、统一认证), 归 platform/;
 // 使用扁平 Gradle 项目名, services/ 与 platform/ 只作为源码目录分组, 不成为额外模块;
 // 本文件先于 buildSrc 执行, 无法引用 AspenProjects 常量; 新增或改名模块时必须同步
 // buildSrc/src/main/kotlin/AspenProjects.kt
@@ -130,12 +130,15 @@ include(
     ":aspen-common-gateway-contract",
     ":aspen-common-gateway",
     ":aspen-common-web",
+    ":aspen-common-security",
     ":aspen-admin-api",
     ":aspen-admin-biz",
     ":aspen-storage-api",
     ":aspen-storage-biz",
     ":aspen-task-api",
     ":aspen-task-biz",
+    ":aspen-auth-api",
+    ":aspen-auth-biz",
     ":aspen-gateway",
     ":aspen-architecture-test",
 )
@@ -146,11 +149,14 @@ project(":aspen-common-cache").projectDir = file("aspen-common/aspen-common-cach
 project(":aspen-common-gateway-contract").projectDir = file("aspen-common/aspen-common-gateway-contract")
 project(":aspen-common-gateway").projectDir = file("aspen-common/aspen-common-gateway")
 project(":aspen-common-web").projectDir = file("aspen-common/aspen-common-web")
+project(":aspen-common-security").projectDir = file("aspen-common/aspen-common-security")
 project(":aspen-admin-api").projectDir = file("services/aspen-admin/aspen-admin-api")
 project(":aspen-admin-biz").projectDir = file("services/aspen-admin/aspen-admin-biz")
 project(":aspen-storage-api").projectDir = file("services/aspen-storage/aspen-storage-api")
 project(":aspen-storage-biz").projectDir = file("services/aspen-storage/aspen-storage-biz")
 project(":aspen-task-api").projectDir = file("platform/aspen-task/aspen-task-api")
 project(":aspen-task-biz").projectDir = file("platform/aspen-task/aspen-task-biz")
+project(":aspen-auth-api").projectDir = file("platform/aspen-auth/aspen-auth-api")
+project(":aspen-auth-biz").projectDir = file("platform/aspen-auth/aspen-auth-biz")
 project(":aspen-gateway").projectDir = file("platform/aspen-gateway")
 project(":aspen-architecture-test").projectDir = file("aspen-architecture-test")

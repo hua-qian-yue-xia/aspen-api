@@ -19,7 +19,7 @@ import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-/** 覆盖路由信封发布的取号、原子替换与通知的介质操作语义 */
+/** 覆盖路由信封发布的取号、版本守卫落盘与通知的介质操作语义 */
 class RouteEnvelopePublisherTest {
     private val aspenRedisOperations: AspenRedisOperations =
         Mockito.mock(AspenRedisOperations::class.java)
@@ -34,33 +34,71 @@ class RouteEnvelopePublisherTest {
         clock = Clock.fixed(Instant.parse("2026-09-07T02:00:00Z"), ZoneId.of("Asia/Shanghai")),
     )
 
-    /** 验证一次发布完成取号、信封原子替换与携带版本号的通知, 且信封内容完整 */
+    /** 验证一次发布完成取号、版本守卫落盘与携带版本号的广播, 且信封内容完整 */
     @Test
-    fun `publishes versioned envelope and notifies channel`() {
+    fun `publishes versioned envelope through guarded set`() {
         Mockito.`when`(aspenRedisOperations.increment("aspen:local:gateway:routes:version")).thenReturn(7L)
+        Mockito.`when`(
+            aspenRedisOperations.setValueIfNewer(
+                eqText("aspen:local:gateway:routes"),
+                anyText(),
+                eqText("aspen:local:gateway:routes:refresh"),
+            ),
+        ).thenReturn(true)
 
         val version = publisher.publishAll(listOf(route("aspen-admin"), route("demo-service")))
 
         assertEquals(7L, version)
         val captor = ArgumentCaptor.forClass(String::class.java)
-        Mockito.verify(aspenRedisOperations).setValue(eqText("aspen:local:gateway:routes"), captureText(captor))
+        Mockito.verify(aspenRedisOperations).setValueIfNewer(
+            eqText("aspen:local:gateway:routes"),
+            captureText(captor),
+            eqText("aspen:local:gateway:routes:refresh"),
+        )
         val envelope = objectMapper.readValue<RouteCatalogSnapshot>(captor.value)
         assertEquals(7L, envelope.version)
         assertEquals("2026-09-07T10:00+08:00", envelope.publishedAt)
         assertEquals(listOf("aspen-admin", "demo-service"), envelope.routes.map { it.routeCode })
-        Mockito.verify(aspenRedisOperations).publish("aspen:local:gateway:routes:refresh", "7")
+    }
+
+    /** 验证守卫拒绝旧版本 (并发发布旧盖新) 不视为失败, 返回取号并等待下次发布自愈 */
+    @Test
+    fun `keeps version and does not fail when guard rejects stale envelope`() {
+        Mockito.`when`(aspenRedisOperations.increment("aspen:local:gateway:routes:version")).thenReturn(8L)
+        Mockito.`when`(
+            aspenRedisOperations.setValueIfNewer(
+                eqText("aspen:local:gateway:routes"),
+                anyText(),
+                eqText("aspen:local:gateway:routes:refresh"),
+            ),
+        ).thenReturn(false)
+
+        val version = publisher.publishAll(emptyList())
+
+        assertEquals(8L, version)
     }
 
     /** 验证空路由列表仍发布空信封, 清空全部路由是合法的发布形态 */
     @Test
     fun `publishes empty envelope when no routes remain`() {
         Mockito.`when`(aspenRedisOperations.increment("aspen:local:gateway:routes:version")).thenReturn(9L)
+        Mockito.`when`(
+            aspenRedisOperations.setValueIfNewer(
+                eqText("aspen:local:gateway:routes"),
+                anyText(),
+                eqText("aspen:local:gateway:routes:refresh"),
+            ),
+        ).thenReturn(true)
 
         val version = publisher.publishAll(emptyList())
 
         assertEquals(9L, version)
         val captor = ArgumentCaptor.forClass(String::class.java)
-        Mockito.verify(aspenRedisOperations).setValue(eqText("aspen:local:gateway:routes"), captureText(captor))
+        Mockito.verify(aspenRedisOperations).setValueIfNewer(
+            eqText("aspen:local:gateway:routes"),
+            captureText(captor),
+            eqText("aspen:local:gateway:routes:refresh"),
+        )
         assertEquals(0, objectMapper.readValue<RouteCatalogSnapshot>(captor.value).routes.size)
     }
 
@@ -73,9 +111,7 @@ class RouteEnvelopePublisherTest {
         assertFailsWith<IllegalArgumentException> { publisher.publishAll(emptyList()) }
 
         Mockito.verify(aspenRedisOperations, Mockito.never())
-            .setValue(Mockito.anyString(), Mockito.anyString())
-        Mockito.verify(aspenRedisOperations, Mockito.never())
-            .publish(Mockito.anyString(), Mockito.anyString())
+            .setValueIfNewer(Mockito.anyString(), Mockito.anyString(), Mockito.anyString())
     }
 
     /**
@@ -85,6 +121,13 @@ class RouteEnvelopePublisherTest {
      * @return matcher 登记结果, matcher 返回 null 时回退为原值
      */
     private fun eqText(value: String): String = ArgumentMatchers.eq(value) ?: value
+
+    /**
+     * anyString matcher 的非空包装: Kotlin 非空参数不接受 matcher 返回的 null
+     *
+     * @return matcher 登记结果, matcher 返回 null 时回退为空字符串
+     */
+    private fun anyText(): String = ArgumentMatchers.anyString() ?: ""
 
     /**
      * capture matcher 的非空包装: Kotlin 非空参数不接受 matcher 返回的 null

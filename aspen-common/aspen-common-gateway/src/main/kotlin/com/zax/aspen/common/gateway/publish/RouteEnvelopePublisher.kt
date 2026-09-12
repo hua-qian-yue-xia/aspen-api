@@ -33,7 +33,7 @@ class RouteEnvelopePublisher(
     private val clock: Clock,
 ) {
     /**
-     * 全量构建并原子发布路由信封
+     * 全量构建并以版本守卫方式发布路由信封
      *
      * @param routes 本次发布的全部启用路由快照, 语义非法的行已由调用方过滤
      * @return 本次发布经 Redis 版本计数器 INCR 产生的版本号, 单调递增
@@ -46,12 +46,19 @@ class RouteEnvelopePublisher(
             publishedAt = OffsetDateTime.now(clock).toString(),
             routes = routes,
         )
-        aspenRedisOperations.setValue(
+        val adopted = aspenRedisOperations.setValueIfNewer(
             GatewayRouteContract.routesKey(environment),
             objectMapper.writeValueAsString(envelope),
+            GatewayRouteContract.refreshChannel(environment),
         )
-        aspenRedisOperations.publish(GatewayRouteContract.refreshChannel(environment), version.toString())
-        log.info("路由快照已发布, version={}, routes={}", version, routes.size)
+        if (adopted) {
+            log.info("路由快照已发布, version={}, routes={}", version, routes.size)
+        } else {
+            log.warn(
+                "路由快照版本 {} 未采纳 (在途信封不旧于本次, 并发发布旧盖新被拒绝), 待下次发布自愈",
+                version,
+            )
+        }
         return version
     }
 

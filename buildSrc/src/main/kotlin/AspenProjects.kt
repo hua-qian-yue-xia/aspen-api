@@ -24,6 +24,8 @@ object AspenProjects {
 
     const val COMMON_WEB = ":aspen-common-web"
 
+    const val COMMON_SECURITY = ":aspen-common-security"
+
     const val ADMIN_API = ":aspen-admin-api"
 
     const val ADMIN_BIZ = ":aspen-admin-biz"
@@ -35,6 +37,10 @@ object AspenProjects {
     const val TASK_API = ":aspen-task-api"
 
     const val TASK_BIZ = ":aspen-task-biz"
+
+    const val AUTH_API = ":aspen-auth-api"
+
+    const val AUTH_BIZ = ":aspen-auth-biz"
 
     const val GATEWAY = ":aspen-gateway"
 
