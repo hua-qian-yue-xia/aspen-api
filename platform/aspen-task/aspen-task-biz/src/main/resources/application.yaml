@@ -1,0 +1,63 @@
+server:
+  port: 7400
+
+spring:
+  application:
+    # 统一任务服务名, 进程和 Docker 镜像; 网关路由 lb://aspen-task-biz 指向该注册名
+    name: aspen-task-biz
+  config:
+    import:
+      # 配置中心分层: 公共配置在前, 服务私有配置在后; optional 前缀保证本地无 Nacos 也能启动
+      - optional:nacos:aspen-common
+      - optional:nacos:${spring.application.name}
+  # datasource/jimmer 等运行配置统一放 Nacos 的 aspen-task-biz, 本文件只保留接线 (地址/凭据/命名空间);
+  # Quartz JDBC JobStore 复用应用数据源, 与任务业务表同库 (aspen_task)
+  cloud:
+    nacos:
+      # 地址与凭据经环境变量注入, 默认值仅供本地开发; 生产必须覆盖且密码不得写进配置文件
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+      server-addr: ${NACOS_HOST}:${NACOS_PORT}
+      config:
+        namespace: ${NACOS_NAMESPACE:prod}
+        file-extension: yaml
+  quartz:
+    # Quartz 运行基线 (技术架构 14.1.4): JDBC JobStore 集群模式, 全部实例共享 aspen_task 库;
+    # QRTZ_* 表由本服务 V002 迁移引入, 运行期禁止让 Quartz 自建表结构
+    job-store-type: jdbc
+    jdbc:
+      initialize-schema: never
+    scheduler-name: aspen-task
+    startup-delay: 0s
+    properties:
+      org.quartz.scheduler.instanceId: AUTO
+      org.quartz.scheduler.instanceIdGenerator.class: org.quartz.simpl.SimpleInstanceIdGenerator
+      org.quartz.jobStore.isClustered: true
+      # 集群检入间隔 (毫秒): 故障接管的感知时延下限, 与 misfireThreshold 一起决定错过触发的判定
+      org.quartz.jobStore.clusterCheckinInterval: 15000
+      # 错过触发判定阈值 (毫秒): Trigger 到点后超过该时长未被任何实例执行即视为 misfire
+      org.quartz.jobStore.misfireThreshold: 60000
+      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate
+      org.quartz.jobStore.tablePrefix: QRTZ_
+      org.quartz.threadPool.threadCount: 8
+      org.quartz.threadPool.threadPriority: 5
+
+# Jimmer starter 的语言开关决定 sqlClient Bean 的产出类型:
+# kotlin 时直接产出 KSqlClient, Kotlin Repository 按类型注入, 无需任何桥接 Bean
+jimmer:
+  language: kotlin
+
+# Aspen 缓存声明: 全租户投递的启用租户快照, 未命中回源 Admin 内部契约,
+# Redis 故障时降级直连拉取 (缓存只是防抖介质, 权威数据在 Admin 库)
+aspen:
+  cache:
+    definitions:
+      task-tenant-snapshot:
+        group: task
+        domain: tenant-snapshot
+        ttl: 60s
+  task:
+    # 执行日志回传通道开关 (默认开启), 关闭后 internal 回传端点整端退场;
+    # 条目封顶 max-entries-per-execution (默认 1000) 单执行跨批次累计生效
+    log-api:
+      enabled: true

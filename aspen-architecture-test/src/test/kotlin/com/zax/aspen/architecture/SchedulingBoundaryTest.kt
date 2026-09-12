@@ -43,10 +43,10 @@ class SchedulingBoundaryTest {
         if (Regex("@Scheduled\\b").containsMatchIn(text)) {
             violations.add("$relative: 禁止 @Scheduled, 周期任务统一交给 aspen-task-biz")
         }
-        if (text.contains("org.quartz") && !relative.startsWith("aspen-task/aspen-task-biz/")) {
+        if (text.contains("org.quartz") && !relative.startsWith("platform/aspen-task/aspen-task-biz/")) {
             violations.add("$relative: Quartz 只允许 aspen-task-biz 引入")
         }
-        if (relative.contains("/biz/") && !relative.startsWith("aspen-task/")) {
+        if (relative.contains("/biz/") && !relative.startsWith("platform/aspen-task/")) {
             val packageSegments = relative.substringAfter("/biz/").split('/')
             packageSegments.dropLast(1).forEach { segment ->
                 if (segment in FORBIDDEN_BIZ_PACKAGES) {

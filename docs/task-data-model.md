@@ -9,9 +9,9 @@
 Aspen Task 是全体系统一任务微服务，承载所有周期任务、固定时点任务与补偿扫描任务的调度与投递，业务 `biz` 一律不自建定时循环。首版 3 张业务表 + Quartz 集群运行时表，代码位于：
 
 ```text
-aspen-task/aspen-task-api/src/main/kotlin/com/zax/aspen/task/api/   # 契约、入参出参与域枚举
-aspen-task/aspen-task-biz/src/main/kotlin/com/zax/aspen/task/biz/   # 管理、调度与 HTTP 投递
-aspen-task/aspen-task-biz/src/main/resources/db/migration/          # V001 业务表 + V002 Quartz 表
+platform/aspen-task/aspen-task-api/src/main/kotlin/com/zax/aspen/task/api/   # 契约、入参出参与域枚举
+platform/aspen-task/aspen-task-biz/src/main/kotlin/com/zax/aspen/task/biz/   # 管理、调度与 HTTP 投递
+platform/aspen-task/aspen-task-biz/src/main/resources/db/migration/          # V001 业务表 + V002 Quartz 表
 ```
 
 设计参考了 Friendship-and-chat-api（芋道 infra 定时任务）的 Quartz JDBC Cluster + 执行日志 + 手动触发形态；其 11 项缺口在本模型中修正（见第 4、5 节）：handlerName 全局唯一且只支持本地 Bean 调用、仅 cron 触发、`Thread.sleep` 阻塞式重试、无超时控制、多租户共用一条执行日志、DB 与 Quartz 双写靠手动 sync 兜底、misfire 走默认值等。

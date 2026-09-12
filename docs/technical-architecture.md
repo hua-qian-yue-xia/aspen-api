@@ -207,14 +207,15 @@ aspen/
 │   ├── aspen-common-feign/              # Feign 拦截器、超时和错误解码
 │   ├── aspen-common-sentinel/           # 资源命名、规则与降级契约
 │   └── aspen-common-rocketmq/           # 事件信封、生产消费与幂等设施
-├── aspen-gateway/                       # 唯一外部入口，不拆 api/biz
 ├── aspen-architecture-test/             # 全仓架构边界测试：注入、KDoc、Redis 访问与 CacheKey 工厂，纯测试模块无 main 源码集
-├── aspen-auth/
-│   ├── aspen-auth-api/                  # 认证和权限对外契约
-│   └── aspen-auth-biz/                  # 认证和权限运行实现
-├── aspen-task/
-│   ├── aspen-task-api/                  # 任务定义、管理和执行记录契约
-│   └── aspen-task-biz/                  # 唯一调度运行时，集群协调和任务投递
+├── platform/                            # 平台级基建服务：面向全体业务服务与全租户的支撑运行时
+│   ├── aspen-gateway/                   # 唯一外部入口，不拆 api/biz
+│   ├── aspen-auth/
+│   │   ├── aspen-auth-api/              # 认证和权限对外契约
+│   │   └── aspen-auth-biz/              # 认证和权限运行实现
+│   └── aspen-task/
+│       ├── aspen-task-api/              # 任务定义、管理和执行记录契约
+│       └── aspen-task-biz/              # 唯一调度运行时，集群协调和任务投递
 ├── services/
 │   ├── aspen-admin/
 │   │   ├── aspen-admin-api/             # Admin 对外契约，契约类型目录内按 upm/sys 分组
@@ -1059,7 +1060,7 @@ Quartz 负责“到点发起一次执行尝试”，不负责判断业务最终�
 - 禁止使用 RAMJobStore；Quartz 表、任务定义、执行记录和 Outbox 数据必须持久化并备份。
 - Quartz Job 不承载具体业务逻辑，不访问其他服务的业务表，只生成任务执行实例并投递命令。
 - v1 投递通道为同步 HTTP，内部微服务与外部项目共用同一目标模型（HTTP 方法、URL、请求头、请求体、超时、重试与租户模板占位符）；执行结果以 HTTP 响应判定，2xx 视为受理成功。「本地任务事务 + Outbox + RocketMQ」是消息通道引入后的扩展位，不得与 HTTP 通道并存为两套权威语义。
-- 执行过程日志按 `executionId + seq` 经内部回传契约 `POST /internal/task/execution-log` 落库（`task_execution_log`，重复上报幂等），供管理端查看执行走向；该通道是依赖方向表「business-biz -> aspen-task-api 回传任务执行结果」的首个落地形态，未来心跳与协作式取消沿同一通道扩展。
+- 执行过程日志按 `executionId + seq` 经内部回传契约 `POST /internal/task/execution-log` 落库（`task_execution_log`，重复上报幂等；单逻辑执行回传条数跨批次累计封顶，默认 1000，经 `aspen.task.log-api.max-entries-per-execution` 配置，超出拒绝；回传端点经 `aspen.task.log-api.enabled` 开关，默认开启、关闭即整端点退场），供管理端查看执行走向（读取与回传上限同源封顶）；该通道是依赖方向表「business-biz -> aspen-task-api 回传任务执行结果」的首个落地形态，未来心跳与协作式取消沿同一通道扩展。
 - HTTP 目标在每次投递前必须通过目标校验：仅允许 http/https 协议，拒绝环回、私有、链路本地与保留地址，内部目标经显式配置白名单放行，并禁止跟随重定向（防 SSRF 与重定向绕过）。
 - 任务目标由稳定的任务类型和版本标识，不保存可执行脚本、任意类名或可反射调用的方法名。
 - 每个任务显式配置时区、Cron、Misfire 策略、并发策略、超时、最大重试、退避、启停状态和负责人。
@@ -1069,7 +1070,7 @@ Quartz 负责“到点发起一次执行尝试”，不负责判断业务最终�
 `aspen-task` 仍遵循 `api` / `biz` 分离：
 
 ```text
-aspen-task/
+platform/aspen-task/
 ├── aspen-task-api/
 │   └── src/main/kotlin/com/zax/aspen/task/api/
 │       ├── contract/                    # 创建、启停、触发、查询执行记录
@@ -1095,7 +1096,7 @@ aspen-task/
         └── converter/
 ```
 
-v1 的任务目标是管理端配置的 HTTP 端点，`aspen-task-biz` 不依赖任何业务 `api` 即可投递，内部微服务与外部项目共用同一目标模型；任务服务不拥有订单关闭、账单生成等业务 Payload 的语义。投递请求携带 `executionId`、`attempt`、`taskId`、计划触发时间与 Trace ID（经 Aspen 溯源请求头传递），目标服务以 `executionId` 幂等、按 `attempt` 识别同一逻辑执行的合法重试。消息通道引入后，「业务任务命令由目标服务 `api/task` 拥有 + RocketMQ 投递 + 结果事件回传」的 `biz -> api` 双向依赖随之恢复，不得演变为 `api -> api` 循环。
+v1 的任务目标是管理端配置的 HTTP 端点，投递通道本身零业务 `api` 依赖；全租户任务的启用租户解析依赖 `aspen-admin-api` 的 UPM 内部契约（`TenantSourceClient` 经 Admin 内部端点拉取并短 TTL 缓存），这是 task-biz 对业务 `api` 的唯一依赖方向；内部微服务与外部项目共用同一目标模型；任务服务不拥有订单关闭、账单生成等业务 Payload 的语义。投递请求携带 `executionId`、`attempt`、`taskId`、计划触发时间与 Trace ID（经 Aspen 溯源请求头传递），目标服务以 `executionId` 幂等、按 `attempt` 识别同一逻辑执行的合法重试。消息通道引入后，「业务任务命令由目标服务 `api/task` 拥有 + RocketMQ 投递 + 结果事件回传」的 `biz -> api` 双向依赖随之恢复，不得演变为 `api -> api` 循环。
 
 每次逻辑触发生成稳定的 `executionId`，Task 对该 ID 建立唯一约束。任务命令携带 `executionId`、`attempt`、`taskId`、计划触发时间、实际触发时间和 Trace ID。目标业务服务以 `executionId` 或业务幂等键保护业务效果，并按 `attempt` 识别同一逻辑执行的合法重试。
 

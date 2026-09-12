@@ -173,13 +173,14 @@ aspen/
 │   ├── aspen-common-feign/         # Feign、请求头、超时和错误解码
 │   ├── aspen-common-sentinel/      # 资源命名、规则和降级契约
 │   └── aspen-common-rocketmq/      # 事件信封、生产/消费和幂等规范
-├── aspen-gateway/                  # 统一网关
-├── aspen-auth/
-│   ├── aspen-auth-api/             # 认证和权限契约
-│   └── aspen-auth-biz/             # 认证运行实现
-├── aspen-task/
-│   ├── aspen-task-api/             # 任务管理和执行记录契约
-│   └── aspen-task-biz/             # Quartz 集群、执行记录和任务投递
+├── platform/                       # 平台级基建服务：面向全体业务服务的支撑运行时
+│   ├── aspen-gateway/              # 统一网关
+│   ├── aspen-auth/
+│   │   ├── aspen-auth-api/         # 认证和权限契约
+│   │   └── aspen-auth-biz/         # 认证运行实现
+│   └── aspen-task/
+│       ├── aspen-task-api/         # 任务管理和执行记录契约
+│       └── aspen-task-biz/         # Quartz 集群、执行记录和任务投递
 └── services/
     ├── aspen-admin/
     │   ├── aspen-admin-api/        # Admin 契约，契约类型目录内按 upm/sys 业务组归档

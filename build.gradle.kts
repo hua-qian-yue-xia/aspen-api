@@ -18,9 +18,14 @@ val forbiddenDependencyGroups = setOf(
     "org.apache.dubbo",
 )
 
-// 通过物理目录识别服务模块, 避免依赖模块名称字符串推断边界
+// 通过物理目录识别服务模块 (services/ 业务服务与 platform/ 平台服务), 避免依赖模块名称字符串推断边界
 val serviceProjectPaths = subprojects
-    .filter { it.projectDir.toPath().startsWith(rootDir.toPath().resolve("services")) }
+    .filter { subproject ->
+        val projectDirPath = subproject.projectDir.toPath()
+        // common 模块对业务服务与平台服务同等禁依赖, 二者必须同时纳入服务边界
+        projectDirPath.startsWith(rootDir.toPath().resolve("services")) ||
+            projectDirPath.startsWith(rootDir.toPath().resolve("platform"))
+    }
     .map { it.path }
     .toSet()
 
