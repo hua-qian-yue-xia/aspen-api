@@ -117,25 +117,40 @@ dependencyResolutionManagement {
 
 rootProject.name = "aspen"
 
-// Admin 是一个微服务, 由普通契约 JAR 和唯一可运行 Biz 模块组成
-// 使用扁平 Gradle 项目名, services/aspen-admin 只作为源码目录分组, 不成为额外模块
-// Gateway 是边缘入口, 单模块不拆 api/biz, 位于仓库根目录; 本文件先于 buildSrc 执行,
-// 无法引用 AspenProjects 常量; 新增或改名模块时必须同步 buildSrc/src/main/kotlin/AspenProjects.kt
+// Admin 与 Storage 是业务微服务, 由普通契约 JAR 和唯一可运行 Biz 模块组成;
+// Task 是平台级统一任务服务 (Quartz 集群唯一运行时), 与 Gateway 同样位于仓库根目录;
+// 使用扁平 Gradle 项目名, services/ 与 aspen-task/ 只作为源码目录分组, 不成为额外模块;
+// 本文件先于 buildSrc 执行, 无法引用 AspenProjects 常量; 新增或改名模块时必须同步
+// buildSrc/src/main/kotlin/AspenProjects.kt
 include(
     ":aspen-common-core",
     ":aspen-common-gen",
     ":aspen-common-database",
     ":aspen-common-cache",
+    ":aspen-common-gateway-contract",
     ":aspen-common-gateway",
+    ":aspen-common-web",
     ":aspen-admin-api",
     ":aspen-admin-biz",
+    ":aspen-storage-api",
+    ":aspen-storage-biz",
+    ":aspen-task-api",
+    ":aspen-task-biz",
     ":aspen-gateway",
+    ":aspen-architecture-test",
 )
 project(":aspen-common-core").projectDir = file("aspen-common/aspen-common-core")
 project(":aspen-common-gen").projectDir = file("aspen-common/aspen-common-gen")
 project(":aspen-common-database").projectDir = file("aspen-common/aspen-common-database")
 project(":aspen-common-cache").projectDir = file("aspen-common/aspen-common-cache")
+project(":aspen-common-gateway-contract").projectDir = file("aspen-common/aspen-common-gateway-contract")
 project(":aspen-common-gateway").projectDir = file("aspen-common/aspen-common-gateway")
+project(":aspen-common-web").projectDir = file("aspen-common/aspen-common-web")
 project(":aspen-admin-api").projectDir = file("services/aspen-admin/aspen-admin-api")
 project(":aspen-admin-biz").projectDir = file("services/aspen-admin/aspen-admin-biz")
+project(":aspen-storage-api").projectDir = file("services/aspen-storage/aspen-storage-api")
+project(":aspen-storage-biz").projectDir = file("services/aspen-storage/aspen-storage-biz")
+project(":aspen-task-api").projectDir = file("aspen-task/aspen-task-api")
+project(":aspen-task-biz").projectDir = file("aspen-task/aspen-task-biz")
 project(":aspen-gateway").projectDir = file("aspen-gateway")
+project(":aspen-architecture-test").projectDir = file("aspen-architecture-test")

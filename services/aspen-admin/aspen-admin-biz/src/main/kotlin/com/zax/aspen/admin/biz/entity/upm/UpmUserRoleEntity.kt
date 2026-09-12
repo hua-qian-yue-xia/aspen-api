@@ -7,6 +7,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
 
@@ -22,13 +25,31 @@ interface UpmUserRoleEntity : TenantScopedEntity, CreateAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val userRoleId: Long
 
-    /** 被授权用户主键 */
+    /** 被授权用户; 用户或角色删除时级联删除授权 */
+    @ManyToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
+    val user: UpmUserEntity
+
+    /** 被授权用户主键; user 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("user")
     val userId: Long
 
-    /** 授权角色主键 */
+    /** 授权角色; 角色删除时级联删除授权 */
+    @ManyToOne
+    @JoinColumn(name = "role_id", referencedColumnName = "role_id")
+    val role: UpmRoleEntity
+
+    /** 授权角色主键; role 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("role")
     val roleId: Long
 
-    /** 数据范围覆盖部门主键; 为空表示使用角色默认数据范围; 非空时仅在该部门范围内生效 */
+    /** 数据范围覆盖部门; 为空表示使用角色默认数据范围; 非空时仅在该部门范围内生效; 范围部门被删除时置空 */
+    @ManyToOne
+    @JoinColumn(name = "scope_dept_id", referencedColumnName = "dept_id")
+    val scopeDept: UpmDeptEntity?
+
+    /** 数据范围覆盖部门主键; scopeDept 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("scopeDept")
     val scopeDeptId: Long?
 
     /** 授权来源, 约定取值为 manual/import/api, 区分管理员手工与系统批量授权 */
@@ -45,8 +66,14 @@ interface UpmUserRoleEntity : TenantScopedEntity, CreateAuditEntity {
     /** 授权失效终点; 到期自动失效; 为空表示长期有效 */
     val validTo: LocalDateTime?
 
-    /** 授权人主体标识; 系统自动授权时为服务身份字符串 */
-    val grantedBy: String?
+    /** 执行授权的用户; 系统自动授权时为空; 授权人被删除时置空 */
+    @ManyToOne
+    @JoinColumn(name = "granted_by", referencedColumnName = "user_id")
+    val grantedByUser: UpmUserEntity?
+
+    /** 授权用户主键; grantedByUser 关联的标量视图, 审计追溯与保存时使用 */
+    @IdView("grantedByUser")
+    val grantedBy: Long?
 
     /** 授权原因, 例如「入职默认角色」「项目临时授权」; 审计与到期清理判断使用 */
     val grantReason: String?
@@ -54,8 +81,14 @@ interface UpmUserRoleEntity : TenantScopedEntity, CreateAuditEntity {
     /** 撤销时间; 为空表示未撤销; 设置后授权失效但记录保留 */
     val revokedAt: LocalDateTime?
 
-    /** 撤销人主体标识; 审计追溯使用 */
-    val revokedBy: String?
+    /** 执行撤销的用户; 撤销人被删除时置空 */
+    @ManyToOne
+    @JoinColumn(name = "revoked_by", referencedColumnName = "user_id")
+    val revokedByUser: UpmUserEntity?
+
+    /** 撤销用户主键; revokedByUser 关联的标量视图, 审计追溯与保存时使用 */
+    @IdView("revokedByUser")
+    val revokedBy: Long?
 
     /** 撤销原因; 审计与误撤销恢复判断使用 */
     val revokeReason: String?

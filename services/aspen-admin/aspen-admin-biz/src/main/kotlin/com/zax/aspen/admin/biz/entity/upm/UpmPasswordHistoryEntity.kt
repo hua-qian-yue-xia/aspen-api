@@ -6,6 +6,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 
 /**
@@ -20,7 +23,13 @@ interface UpmPasswordHistoryEntity : TenantScopedEntity, CreateAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val passwordHistoryId: Long
 
-    /** 历史密码归属用户主键 */
+    /** 历史密码归属用户 */
+    @ManyToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
+    val user: UpmUserEntity
+
+    /** 历史密码归属用户主键; user 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("user")
     val userId: Long
 
     /** 历史密码摘要, 只允许保存不可逆摘要, 禁止写入明文; 校验时以相同摘要算法比对 */

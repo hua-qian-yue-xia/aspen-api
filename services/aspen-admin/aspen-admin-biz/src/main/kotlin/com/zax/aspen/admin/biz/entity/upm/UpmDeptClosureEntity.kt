@@ -6,6 +6,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 
 /**
@@ -21,10 +24,22 @@ interface UpmDeptClosureEntity : TenantScopedEntity, CreateAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val deptClosureId: Long
 
-    /** 祖先部门主键; 包含自身作为 depth 为 0 的行 */
+    /** 祖先部门; 包含自身作为 depth 为 0 的行 */
+    @ManyToOne
+    @JoinColumn(name = "ancestor_id", referencedColumnName = "dept_id")
+    val ancestor: UpmDeptEntity
+
+    /** 祖先部门主键; ancestor 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("ancestor")
     val ancestorId: Long
 
-    /** 后代部门主键 */
+    /** 后代部门 */
+    @ManyToOne
+    @JoinColumn(name = "descendant_id", referencedColumnName = "dept_id")
+    val descendant: UpmDeptEntity
+
+    /** 后代部门主键; descendant 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("descendant")
     val descendantId: Long
 
     /** 祖先到后代的跳数; 自身为 0, 直接子部门为 1; 按层级过滤时使用 */

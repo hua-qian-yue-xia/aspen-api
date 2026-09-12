@@ -6,6 +6,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Serialized
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
@@ -23,7 +26,13 @@ interface UpmLoginLogEntity : TenantScopedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val loginLogId: Long
 
-    /** 登录用户主键; 输入了不存在用户名时为空, 保留记录用于暴力破解分析 */
+    /** 登录用户; 输入了不存在用户名时为空, 保留记录用于暴力破解分析; 引用列不设数据库外键, 用户被物理删除后按空值语义处理 */
+    @ManyToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
+    val user: UpmUserEntity?
+
+    /** 登录用户主键; user 关联的标量视图, 按主键过滤与统计时使用 */
+    @IdView("user")
     val userId: Long?
 
     /** 登录时输入的用户名快照; 用户改名后审计仍可读 */

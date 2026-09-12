@@ -1,7 +1,6 @@
 package com.zax.aspen.gateway.route
 
 import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
-import jakarta.annotation.Resource
 import org.slf4j.LoggerFactory
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
@@ -16,13 +15,10 @@ import org.springframework.stereotype.Component
  * 待通知到达或重新部署自愈; 配置文件静态路由不受影响, 仍合并生效
  */
 @Component
-class RouteStartupLoader : ApplicationRunner {
-    @Resource
-    private lateinit var routeSnapshotStore: RouteSnapshotStore
-
-    @Resource
-    private lateinit var applicationEventPublisher: ApplicationEventPublisher
-
+class RouteStartupLoader(
+    private val routeSnapshotStore: RouteSnapshotStore,
+    private val applicationEventPublisher: ApplicationEventPublisher,
+) : ApplicationRunner {
     override fun run(args: ApplicationArguments) {
         try {
             if (routeSnapshotStore.refresh()) {

@@ -16,13 +16,28 @@ object AspenProjects {
 
     const val COMMON_CACHE = ":aspen-common-cache"
 
+    const val COMMON_GATEWAY_CONTRACT = ":aspen-common-gateway-contract"
+
     const val COMMON_GATEWAY = ":aspen-common-gateway"
 
     const val COMMON_GEN = ":aspen-common-gen"
+
+    const val COMMON_WEB = ":aspen-common-web"
 
     const val ADMIN_API = ":aspen-admin-api"
 
     const val ADMIN_BIZ = ":aspen-admin-biz"
 
+    const val STORAGE_API = ":aspen-storage-api"
+
+    const val STORAGE_BIZ = ":aspen-storage-biz"
+
+    const val TASK_API = ":aspen-task-api"
+
+    const val TASK_BIZ = ":aspen-task-biz"
+
     const val GATEWAY = ":aspen-gateway"
+
+    /** 全仓架构边界测试的纯测试模块, 无项目依赖 */
+    const val ARCHITECTURE_TEST = ":aspen-architecture-test"
 }

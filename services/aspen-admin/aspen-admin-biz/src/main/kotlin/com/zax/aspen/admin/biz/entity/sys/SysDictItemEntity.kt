@@ -7,6 +7,10 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
+import org.babyfish.jimmer.sql.OneToMany
 import org.babyfish.jimmer.sql.Table
 
 /**
@@ -23,10 +27,22 @@ interface SysDictItemEntity : MutableAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val dictItemId: Long
 
-    /** 所属字典主键; 字典物理删除时随级联删除全部字典项 */
+    /** 所属字典; 字典物理删除时随级联删除全部字典项 */
+    @ManyToOne
+    @JoinColumn(name = "dict_id", referencedColumnName = "dict_id")
+    val dict: SysDictEntity
+
+    /** 所属字典主键; dict 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("dict")
     val dictId: Long
 
-    /** 父字典项主键, 支持省市区等树形级联选择; 扁平字典为空; 不设数据库外键, 移动子树时由 Service 在一个事务内维护层级一致 */
+    /** 父字典项, 支持省市区等树形级联选择; 扁平字典为空; 不设数据库外键, 移动子树时由 Service 在一个事务内维护层级一致 */
+    @ManyToOne
+    @JoinColumn(name = "parent_id", referencedColumnName = "dict_item_id")
+    val parent: SysDictItemEntity?
+
+    /** 父字典项主键; parent 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("parent")
     val parentId: Long?
 
     /** 字典项显示文本, 直接用于下拉选项与翻译结果, 例如「已启用」 */
@@ -52,4 +68,8 @@ interface SysDictItemEntity : MutableAuditEntity {
     /** 字典项启停状态; disabled 后不再出现在下拉与翻译结果中, 但已保存的历史值保持不变 */
     @Default("ENABLED")
     val status: EnabledStatus
+
+    /** 直接子字典项; 树形字典的级联选择逐级加载使用 */
+    @OneToMany(mappedBy = "parent")
+    val children: List<SysDictItemEntity>
 }

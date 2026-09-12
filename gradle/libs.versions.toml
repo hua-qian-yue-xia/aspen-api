@@ -9,7 +9,6 @@ springDependencyManagement = "1.1.7"
 springCloud = "2025.1.0"
 springCloudAlibaba = "2025.1.0.0"
 jimmer = "0.11.7"
-archunit = "1.5.0"
 
 [libraries]
 # Spring Boot: 按模块职责选择 Starter, 不允许公共模块传递整套运行时
@@ -30,6 +29,8 @@ spring-boot-starter-quartz = { module = "org.springframework.boot:spring-boot-st
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 spring-boot-starter-webmvc-test = { module = "org.springframework.boot:spring-boot-starter-webmvc-test" }
 spring-boot-starter-security-test = { module = "org.springframework.boot:spring-boot-starter-security-test" }
+# common-web 的装配内部实现依赖, 版本由本模块 api(platform(spring-boot-dependencies)) 约束
+spring-webmvc = { module = "org.springframework:spring-webmvc" }
 
 # Spring Cloud: Gateway 只能用于独立网关模块, 业务服务使用 OpenFeign + LoadBalancer
 spring-cloud-starter-gateway = { module = "org.springframework.cloud:spring-cloud-starter-gateway-server-webflux" }
@@ -48,6 +49,8 @@ sentinel-datasource-nacos = { module = "com.alibaba.csp:sentinel-datasource-naco
 # API 契约模块只按需使用注解/API, 不允许引入 Boot Starter 或运行时基础设施
 spring-web = { module = "org.springframework:spring-web" }
 jakarta-validation-api = { module = "jakarta.validation:jakarta.validation-api" }
+# common-web 的 Filter 编译期依赖, 运行期由使用方的 starter-webmvc (内嵌容器) 提供
+jakarta-servlet-api = { module = "jakarta.servlet:jakarta.servlet-api" }
 
 # Jimmer 不在 Spring BOM 管理范围内, 因此显式锁定 Starter, SQL Kotlin 与 KSP 的相同版本
 jimmer-spring-boot-starter = { module = "org.babyfish.jimmer:jimmer-spring-boot-starter", version.ref = "jimmer" }
@@ -61,9 +64,8 @@ jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations
 jackson-module-kotlin = { module = "tools.jackson.module:jackson-module-kotlin" }
 mysql-connector = { module = "com.mysql:mysql-connector-j" }
 
-# 测试依赖: ArchUnit 用于持续检查 API/Biz, MVC 和 Admin upm/sys 边界
+# 测试依赖: 架构边界测试与各模块单测共享同一组别名
 kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }
-archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
 testcontainers-mysql = { module = "org.testcontainers:testcontainers-mysql" }

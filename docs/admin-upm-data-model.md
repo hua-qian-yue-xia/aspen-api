@@ -1,7 +1,7 @@
 # Admin UPM 数据模型
 
-> 文档状态：首版 24 张表 Entity 与版本化 Schema 已实现，Controller/Service 待建  
-> 文档基线：2026-09-06  
+> 文档状态：首版 24 张表 Entity 与版本化 Schema 已实现，对象关联已按迁移外键全量声明（见 3 节），Controller/Service 待建  
+> 文档基线：2026-09-12  
 > 关联文档：[技术架构](./technical-architecture.md)｜[Common 模块设计](./common-module-design.md)
 
 ## 1. 目标与来源
@@ -47,9 +47,9 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/upm/
 ## 3. Jimmer 映射约定
 
 - 实体以 `Entity` 结尾，每个 Jimmer Entity 或 MappedSuperclass 单独放在一个 Kotlin 文件中。
-- 主键映射为数据库 `BIGINT UNSIGNED AUTO_INCREMENT`，JVM 使用 `Long`。主键列使用表名去掉 `upm_` 前缀加 `_id` 的语义化命名（如 `upm_user.user_id`），由各 Entity 自行声明，公共映射不固定 ID 策略；引用列与被引用主键同名，join 语义自解释。将来增加对象关联时必须显式声明被引用主键列，不依赖默认 `id` 约定；写入值必须限制在 JVM 有符号 `Long` 范围内。
+- 主键映射为数据库 `BIGINT UNSIGNED AUTO_INCREMENT`，JVM 使用 `Long`。主键列使用表名去掉 `upm_` 前缀加 `_id` 的语义化命名（如 `upm_user.user_id`），由各 Entity 自行声明，公共映射不固定 ID 策略；引用列与被引用主键同名，join 语义自解释。对象关联必须显式声明被引用主键列，不依赖默认 `id` 约定；写入值必须限制在 JVM 有符号 `Long` 范围内。
 - 除 `upm_tenant` 外的业务表包含 `tenant_id`；租户条件必须由未来 Repository 的每条业务查询显式约束。
-- 首版外键在 Jimmer 中映射为标量 ID，数据库迁移仍保留完整外键。等真实查询形状确定后再按需增加关联，避免默认加载对象图。
+- 对象关联已按迁移外键全量声明，原「首版只映射标量 ID」的过渡策略废止。子表每个引用列声明 `@ManyToOne`（`@JoinColumn` 显式给出 `name` 与 `referencedColumnName`），原标量属性保留为同名 `@IdView`，按 id 过滤与保存的既有写法不变。结构组合与授权图谱关系（任职、闭包、部门负责人、角色/菜单/权限授权、用户凭证与安全数据）在父实体声明 `@OneToMany(mappedBy = ...)` 反向集合；登录日志、授权变更日志两类审计流，以及授权人、撤销人、主管、主部门、角色归属、数据范围等归属元数据引用只建正向关联，不建反向集合，防止父实体被审计流与元数据反向导航撑爆。两处不可对象关联：`tenant_id` 由 common 的 `TenantScopedEntity` 原子持有，不能反向引用 UPM 实体，保持标量；授权变更日志的 `subject_type + subject_id` 是多态引用，保持标量。关联只在 Fetcher 显式请求时加载，不存在默认加载对象图。
 - `DATETIME(3)` 映射为 `LocalDateTime`，部署域全部 Docker 主机与应用进程统一使用 `Asia/Shanghai` 时区并接入统一 NTP，时间按服务器时区直接存取；租户 `timezone` 只用于跨时区展示转换。
 - 实体直接组合 common 的 `MutableAuditEntity`（可更新表：完整审计、初始值为 `1` 的乐观锁、`deleted_at` 时间戳逻辑删除）或 `CreateAuditEntity`（不可变关系表：`created_at` 与 `created_by`）与 `TenantScopedEntity`（租户列），不创建业务包级纯组合接口。主键由各实体自行声明，公共映射不固定 ID 策略。租户条件由 common 的 `TenantFilter` 自动追加，业务查询不手写 `tenant_id`。
 - SQL 中的业务默认值通过 Jimmer `@Default` 同步，创建时间和发生时间使用 `@Default("now")` 生成部署域统一时区的 `LocalDateTime`；SQL 同时保留 `CURRENT_TIMESTAMP(3)`，保证非 Jimmer 写入也有数据库默认时间。Jimmer `0.11.7` 的 Kotlin 元数据在校验 `@DatabaseDefault` 时存在数组类型转换缺陷，本版不使用该注解。
@@ -89,4 +89,4 @@ UPM 拥有凭证摘要、外部身份、MFA、会话、密码历史和登录审�
 
 初始迁移为 `V001__create_upm_schema.sql`。版本号在整个 Admin Schema 内必须全局唯一，即使迁移按 `upm/sys` 子目录组织也不能重复。生产环境禁止依赖 Jimmer 自动建表或自动修改结构，后续变化采用新的前向迁移，并遵循扩展、迁移、切换、清理顺序。
 
-所有表使用 InnoDB、`utf8mb4` 和 `utf8mb4_0900_ai_ci`。租户引用使用 `ON DELETE RESTRICT`；纯关系记录通常随主体级联删除；授权人、撤销人、主管和可选范围等历史引用使用 `ON DELETE SET NULL`。`parent_id`、用户主部门和部分审计主体 ID 按来源设计保留为无数据库外键的标量引用。
+所有表使用 InnoDB、`utf8mb4` 和 `utf8mb4_0900_ai_ci`。租户引用使用 `ON DELETE RESTRICT`；纯关系记录通常随主体级联删除；授权人、撤销人、主管和可选范围等历史引用使用 `ON DELETE SET NULL`。授权人、撤销人与授权变更日志操作人在数据库为用户主键 `BIGINT`（系统自动执行时为空），实体同步为 `Long` 与 `@ManyToOne`；此前实体误声明为 String 主体标识，已修正。`parent_id`、用户主部门和登录日志用户等按来源设计不设数据库外键，但对象层仍声明关联，dangling 引用按可空关联的空值语义处理。

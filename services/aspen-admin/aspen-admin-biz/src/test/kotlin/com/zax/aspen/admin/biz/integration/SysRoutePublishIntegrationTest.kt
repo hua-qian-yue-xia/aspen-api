@@ -58,9 +58,10 @@ class SysRoutePublishIntegrationTest {
         assertEquals(1L, envelope.version)
         assertEquals("1", queryString("SELECT COUNT(*) FROM sys_route WHERE deleted_at IS NULL"))
         assertEquals(listOf("aspen-admin"), envelope.routes.map { it.routeCode })
-        assertEquals("lb://aspen-admin", envelope.routes.single().uri)
-        assertEquals("/admin/**", envelope.routes.single().predicates.single().args["_genkey_0"])
-        assertEquals("StripPrefix", envelope.routes.single().filters.single().name)
+        // V004 起: 断言对齐受众前缀 /admin-api/**、原样转发不带过滤器, 目标为注册名 aspen-admin-biz
+        assertEquals("lb://aspen-admin-biz", envelope.routes.single().uri)
+        assertEquals("/admin-api/**", envelope.routes.single().predicates.single().args["_genkey_0"])
+        assertTrue(envelope.routes.single().filters.isEmpty())
     }
 
     /** 验证新增路由在事务提交后增量发布且版本递增 */
@@ -195,6 +196,7 @@ class SysRoutePublishIntegrationTest {
                     "/db/migration/upm/V001__create_upm_schema.sql",
                     "/db/migration/sys/V002__create_sys_schema.sql",
                     "/db/migration/sys/V003__create_sys_route.sql",
+                    "/db/migration/sys/V004__align_admin_route_prefix.sql",
                 ).forEach { resource -> executeMigration(container, resource) }
             }
         }

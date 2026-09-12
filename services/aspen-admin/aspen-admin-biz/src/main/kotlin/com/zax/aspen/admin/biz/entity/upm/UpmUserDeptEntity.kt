@@ -8,6 +8,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
 
@@ -23,10 +26,22 @@ interface UpmUserDeptEntity : TenantScopedEntity, MutableAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val userDeptId: Long
 
-    /** 任职用户主键 */
+    /** 任职用户; 用户物理删除时级联删除任职 */
+    @ManyToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
+    val user: UpmUserEntity
+
+    /** 任职用户主键; user 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("user")
     val userId: Long
 
-    /** 任职部门主键 */
+    /** 任职部门; 部门删除时级联删除任职 */
+    @ManyToOne
+    @JoinColumn(name = "dept_id", referencedColumnName = "dept_id")
+    val dept: UpmDeptEntity
+
+    /** 任职部门主键; dept 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("dept")
     val deptId: Long
 
     /** 主任职标记; 每个用户只有一条主任职, 与用户表 primaryDeptId 保持一致 */
@@ -39,7 +54,13 @@ interface UpmUserDeptEntity : TenantScopedEntity, MutableAuditEntity {
     /** 用工类型, 例如正式/实习/外包; 通讯录筛选与权限策略使用 */
     val employeeType: String?
 
-    /** 直属上级主键; 审批流默认审批人与组织树展示使用; 可空表示无上级 */
+    /** 直属上级; 审批流默认审批人与组织树展示使用; 为空表示无上级; 用户被删除时置空 */
+    @ManyToOne
+    @JoinColumn(name = "manager_user_id", referencedColumnName = "user_id")
+    val managerUser: UpmUserEntity?
+
+    /** 直属上级主键; managerUser 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("managerUser")
     val managerUserId: Long?
 
     /** 入职时间; 组织报表统计使用 */

@@ -7,6 +7,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
 
@@ -23,10 +26,22 @@ interface UpmUserPermissionEntity : TenantScopedEntity, CreateAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val userPermissionId: Long
 
-    /** 目标用户主键 */
+    /** 目标用户 */
+    @ManyToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
+    val user: UpmUserEntity
+
+    /** 目标用户主键; user 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("user")
     val userId: Long
 
-    /** 权限主键 */
+    /** 直接授权的权限 */
+    @ManyToOne
+    @JoinColumn(name = "permission_id", referencedColumnName = "permission_id")
+    val permission: UpmPermissionEntity
+
+    /** 权限主键; permission 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("permission")
     val permissionId: Long
 
     /** 授权效果, 约定取值为 allow/deny; deny 在权限合并时优先于角色授予的 allow */
@@ -42,6 +57,12 @@ interface UpmUserPermissionEntity : TenantScopedEntity, CreateAuditEntity {
     /** 授权原因, 例如「项目临时支持」「审计整改收回」; 到期清理与审计使用 */
     val reason: String?
 
-    /** 授权人主体标识; 系统自动授权时为服务身份字符串 */
-    val grantedBy: String?
+    /** 执行授权的用户; 系统自动授权时为空 */
+    @ManyToOne
+    @JoinColumn(name = "granted_by", referencedColumnName = "user_id")
+    val grantedByUser: UpmUserEntity?
+
+    /** 授权用户主键; grantedByUser 关联的标量视图, 审计追溯与保存时使用 */
+    @IdView("grantedByUser")
+    val grantedBy: Long?
 }

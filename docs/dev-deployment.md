@@ -31,7 +31,7 @@ docker compose -f deploy/docker-compose.yml up -d
 
 ## 4. 服务与地址
 
-端口方案（容器内外一致, 2026-09-06 起）：MySQL=6100 / Redis=6200 / Nacos 主 API=6300。
+端口方案（容器内外一致, 2026-09-06 起）：MySQL=6100 / Redis=6200 / Nacos 主 API=6300。业务服务端口走 7x00 段递增：admin-biz=7100、storage-biz=7200、task-biz=7400（`application.yaml` 直配, 不进配置中心；7300 被 Nacos 客户端 gRPC 自动占用, 业务服务跳过不分配）; 6x00 段专属基础设施, 业务服务不占用。
 
 | 服务 | 地址 | 说明 |
 | --- | --- | --- |
@@ -62,16 +62,18 @@ docker compose -f deploy/docker-compose.yml up -d
 
 | dataId | 内容 |
 | --- | --- |
-| `aspen-common-local.yaml` | 全服务共享配置, 当前含 `aspen.routes.environment: local` |
+| `aspen-common-local.yaml` | 全服务共享配置, 当前含 `aspen.routes.environment: local` 与 `logging.pattern.level`（日志关联 MDC traceId, 配套 common-web 的 Trace ID 排查链路） |
 | `aspen-admin-biz-local.yaml` | Admin 本地配置, 当前开启 `aspen.gen.dict.enabled: true`（演示分层：代码默认 false, 配置中心覆盖为 true） |
 | `aspen-gateway-local.yaml` | Gateway 占位, 待网关接入配置中心后填充 |
+| `aspen-storage-biz-local.yaml` | Storage 本地配置, 当前为占位种子; 数据源与 Jimmer 运行配置待服务接入数据库后填充 |
+| `aspen-task-biz-local.yaml` | Task 本地配置, 当前为占位种子; 任务服务的租户来源地址、HTTP 目标白名单与 Quartz 集群配置待部署接线后填充 |
 
 种子策略：**只补缺失**——每次 `up` 时先 `GET /nacos/v3/admin/cs/config` 查存在，404 才 `POST` 发布；控制台手工修改不会被覆盖。`FORCE_SEED=1 docker compose ... up` 强制以 Git 文件覆盖全部 dataId。修改种子文件后想生效：删除对应 dataId 或使用 FORCE_SEED。
 
-## 7. 客户端接线（当前仅 admin-biz）
+## 7. 客户端接线（admin-biz 与 storage-biz）
 
 - 依赖：`spring-cloud-starter-alibaba-nacos-config`（`implementation`，SCA BOM 管版本，`dependencyManagement` 与 Gateway 同源导入 SC/SCA BOM）。
-- 导入（`application.yaml`）：
+- 导入（`application.yaml`，storage-biz 同款接线, 端口 7200、服务名 `aspen-storage-biz`）：
 
 ```yaml
 spring:

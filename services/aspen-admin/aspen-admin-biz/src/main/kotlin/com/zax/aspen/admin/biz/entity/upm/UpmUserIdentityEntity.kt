@@ -8,6 +8,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Serialized
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
@@ -24,7 +27,13 @@ interface UpmUserIdentityEntity : TenantScopedEntity, MutableAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val userIdentityId: Long
 
-    /** 所属用户主键; 解绑后保留用户本体 */
+    /** 所属用户; 解绑后保留用户本体 */
+    @ManyToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
+    val user: UpmUserEntity
+
+    /** 所属用户主键; user 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("user")
     val userId: Long
 
     /** 身份提供商标识, 例如 oidc-google、ldap-corp; 与 subject 组成租户内唯一外部身份 */

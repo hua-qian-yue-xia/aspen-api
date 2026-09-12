@@ -32,6 +32,8 @@ dependencies {
 
     // 当前阶段只提供可编译, 可启动的最小 MVC 运行时, 不提前引入未使用的基础设施
     implementation(libs.spring.boot.starter.webmvc)
+    // 受众路径前缀等 MVC 运行约定: controller/admin|app 包统一携带 /admin-api、/app-api
+    implementation(project(AspenProjects.COMMON_WEB))
     // JDBC 持久化服务基线: 数据源、事务管理 (@Transactional/事务事件) 与 Spring DAO 异常体系
     implementation(libs.spring.boot.starter.jdbc)
     // 路由快照分发等 Redis 访问一律经 common-cache 受控操作类, 业务代码不直接依赖 Redis 客户端

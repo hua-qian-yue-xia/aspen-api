@@ -7,6 +7,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
 
@@ -22,10 +25,22 @@ interface UpmRoleMenuEntity : TenantScopedEntity, CreateAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val roleMenuId: Long
 
-    /** 授权角色主键 */
+    /** 授权角色; 角色删除时级联删除授权 */
+    @ManyToOne
+    @JoinColumn(name = "role_id", referencedColumnName = "role_id")
+    val role: UpmRoleEntity
+
+    /** 授权角色主键; role 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("role")
     val roleId: Long
 
-    /** 授权菜单主键 */
+    /** 授权菜单; 菜单删除时级联删除授权 */
+    @ManyToOne
+    @JoinColumn(name = "menu_id", referencedColumnName = "menu_id")
+    val menu: UpmMenuEntity
+
+    /** 授权菜单主键; menu 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("menu")
     val menuId: Long
 
     /** 授权来源, 约定取值为 manual/template, 模板批量分配时标记 template */

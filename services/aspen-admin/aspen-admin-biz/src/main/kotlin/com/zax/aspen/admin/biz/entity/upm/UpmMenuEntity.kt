@@ -8,6 +8,10 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
+import org.babyfish.jimmer.sql.OneToMany
 import org.babyfish.jimmer.sql.Serialized
 import org.babyfish.jimmer.sql.Table
 
@@ -24,7 +28,13 @@ interface UpmMenuEntity : TenantScopedEntity, MutableAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val menuId: Long
 
-    /** 父菜单主键; 为空表示顶级菜单; 移动菜单时由 Service 同步重建路径 */
+    /** 父菜单; 为空表示顶级菜单; 移动菜单时由 Service 同步重建路径; 自引用不设数据库外键, 由 Service 校验环 */
+    @ManyToOne
+    @JoinColumn(name = "parent_id", referencedColumnName = "menu_id")
+    val parent: UpmMenuEntity?
+
+    /** 父菜单主键; parent 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("parent")
     val parentId: Long?
 
     /** 菜单编码, 同租户同平台唯一; 前端路由与权限点引用的稳定标识 */
@@ -113,4 +123,16 @@ interface UpmMenuEntity : TenantScopedEntity, MutableAuditEntity {
     /** 菜单状态; 与 isEnabled 语义分工: status 是业务启停, isEnabled 是导航开关 */
     @Default("ENABLED")
     val status: EnabledStatus
+
+    /** 直接子菜单; 菜单树逐级渲染与层级校验使用 */
+    @OneToMany(mappedBy = "parent")
+    val children: List<UpmMenuEntity>
+
+    /** 授权本菜单的角色; 角色菜单树渲染使用 */
+    @OneToMany(mappedBy = "menu")
+    val roleMenus: List<UpmRoleMenuEntity>
+
+    /** 本菜单绑定的后端权限; button 类型菜单的接口鉴权使用 */
+    @OneToMany(mappedBy = "menu")
+    val menuPermissions: List<UpmMenuPermissionEntity>
 }

@@ -7,6 +7,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
 
@@ -23,7 +26,13 @@ interface UpmUserSessionEntity : TenantScopedEntity, MutableAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val userSessionId: Long
 
-    /** 会话归属用户主键 */
+    /** 会话归属用户; 用户物理删除时级联删除会话 */
+    @ManyToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
+    val user: UpmUserEntity
+
+    /** 会话归属用户主键; user 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("user")
     val userId: Long
 
     /** 会话唯一标识, 由 Auth 签发并随刷新令牌携带; 刷新时以此定位会话 */
@@ -56,8 +65,14 @@ interface UpmUserSessionEntity : TenantScopedEntity, MutableAuditEntity {
     /** 会话撤销时间; 管理员强制下线或用户注销设备时设置; 早于过期时间即失效 */
     val revokedAt: LocalDateTime?
 
-    /** 撤销操作人主体标识; 审计追溯使用 */
-    val revokedBy: String?
+    /** 撤销会话的操作用户; 管理员强制下线时为执行管理员, 用户自行注销设备时为本人; 系统自动撤销时为空 */
+    @ManyToOne
+    @JoinColumn(name = "revoked_by", referencedColumnName = "user_id")
+    val revokedByUser: UpmUserEntity?
+
+    /** 撤销操作用户主键; revokedByUser 关联的标量视图, 审计追溯与保存时使用 */
+    @IdView("revokedByUser")
+    val revokedBy: Long?
 
     /** 撤销原因, 例如「管理员强制下线」「安全策略」; 审计使用 */
     val revokeReason: String?

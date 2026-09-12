@@ -9,6 +9,7 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.OneToMany
 import org.babyfish.jimmer.sql.Table
 
 /**
@@ -54,4 +55,20 @@ interface UpmPermissionEntity : TenantScopedEntity, MutableAuditEntity {
 
     /** 权限用途说明, 描述典型使用场景与影响范围 */
     val description: String?
+
+    /** 本权限映射的 HTTP API 路由; Gateway 与安全过滤链按路径反查权限使用 */
+    @OneToMany(mappedBy = "permission")
+    val permissionApis: List<UpmPermissionApiEntity>
+
+    /** 授权本权限的角色; 角色权限计算使用 */
+    @OneToMany(mappedBy = "permission")
+    val rolePermissions: List<UpmRolePermissionEntity>
+
+    /** 绑定本权限的菜单与按钮; 前端按钮级权限控制使用 */
+    @OneToMany(mappedBy = "permission")
+    val menuPermissions: List<UpmMenuPermissionEntity>
+
+    /** 直接授予用户的本权限记录, 含拒绝项; 与角色授权合并计算最终权限集 */
+    @OneToMany(mappedBy = "permission")
+    val userPermissions: List<UpmUserPermissionEntity>
 }

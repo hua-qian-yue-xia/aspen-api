@@ -4,7 +4,6 @@ import com.zax.aspen.admin.biz.entity.sys.SysRouteEntity
 import com.zax.aspen.admin.biz.repository.sys.SysRouteRepository
 import com.zax.aspen.common.gateway.contract.RouteDefinitionSnapshot
 import com.zax.aspen.common.gateway.publish.RouteEnvelopePublisher
-import jakarta.annotation.Resource
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
@@ -20,12 +19,10 @@ import org.springframework.transaction.event.TransactionalEventListener
  * Admin 职责, 介质协议操作属于 common-gateway 职责, 本类是两段的衔接点
  */
 @Component
-class RouteDefinitionPublisher {
-    @Resource
-    private lateinit var sysRouteRepository: SysRouteRepository
-
-    @Resource
-    private lateinit var routeEnvelopePublisher: RouteEnvelopePublisher
+class RouteDefinitionPublisher(
+    private val sysRouteRepository: SysRouteRepository,
+    private val routeEnvelopePublisher: RouteEnvelopePublisher,
+) {
     /**
      * 监听已提交的路由变更并重发布快照
      *

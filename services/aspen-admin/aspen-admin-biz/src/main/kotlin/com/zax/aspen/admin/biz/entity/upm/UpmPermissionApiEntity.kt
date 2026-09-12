@@ -8,6 +8,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 
 /**
@@ -22,7 +25,13 @@ interface UpmPermissionApiEntity : TenantScopedEntity, CreateAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val permissionApiId: Long
 
-    /** 权限主键; 一个权限可映射多条路由, 一条路由只属于一个权限 */
+    /** 所属权限; 一个权限可映射多条路由, 一条路由只属于一个权限; 权限删除时级联删除映射 */
+    @ManyToOne
+    @JoinColumn(name = "permission_id", referencedColumnName = "permission_id")
+    val permission: UpmPermissionEntity
+
+    /** 权限主键; permission 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("permission")
     val permissionId: Long
 
     /** 路由归属应用标识, 例如 admin-api/order-api; 跨服务路由归属各自应用 */

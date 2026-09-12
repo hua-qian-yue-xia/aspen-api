@@ -1,7 +1,7 @@
 # Admin SYS 数据模型
 
-> 文档状态：字典表已改为全局引用数据并支持 @GenDict 枚举播种, 参数表保持租户级, 路由表与 Redis 发布链路已建立; 管理界面与对外查询 API 待建  
-> 文档基线：2026-09-06  
+> 文档状态：字典表已改为全局引用数据并支持 @GenDict 枚举播种, 参数表保持租户级, 路由表与 Redis 发布链路已建立, 分发契约已拆入 gateway-contract 纯契约模块, 字典对象关联已声明 (见 3 节), 路由种子已对齐受众前缀 (V004, 见 7 节); 管理界面与对外查询 API 待建  
+> 文档基线：2026-09-12  
 > 关联文档：[Admin UPM 数据模型](./admin-upm-data-model.md)｜[Common 模块设计](./common-module-design.md)
 
 ## 1. 目标与来源
@@ -32,6 +32,7 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/sys/
 - SYS 实体直接组合 `aspen-common-database` 的 `MutableAuditEntity` 与 `TenantScopedEntity`, 主键由各实体自行声明, 不创建业务包级纯组合接口, 也不依赖 `entity.upm` 的任何类型。
 - 各表启停状态字段已切换为 common-core 的 `EnabledStatus` 枚举, 持久化经 `AspenEnumProviders` 按 code 与数据库小写值互转, 数据零迁移; 标签色型、值类型等展示与解析约定字段仍使用 `String`。
 - `sys_route` 的 `predicates`、`filters` 与 `metadata` 是按语义命名的专用 JSON 列, 经 Jimmer `@Serialized` 映射为类型化集合与映射, 服务层不做手工 JSON 解析, 通用约定见《技术架构》12.5 节。
+- 对象关联与 UPM 同规则: `sys_dict_item` 声明 `dict` 的 `@ManyToOne` 与 `parent` 自引用 (标量保留为同名 `@IdView`), `sys_dict` 声明 `dictItems` 反向集合; `parent_id` 对象级可关联但数据库仍不设外键, 树一致性由 Service 维护; `sys_config.tenant_id` 受 common 租户原子约束不建对象关联; `sys_route` 无引用列, 不涉及关联。
 
 ## 4. 字典设计
 
@@ -63,13 +64,15 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/sys/
 
 - `sys_route` 存放 Spring Cloud Gateway 的动态路由定义, `route_code` 全局唯一并直接作为 Gateway 的 route id, 创建后不可修改; 唯一键与逻辑删除并存意味着编码一经使用即永久占用, 删除后不可重建同码, 误删恢复走逻辑删除行恢复机制。
 - 路由是平台基础设施配置, 全体租户共用同一套规则, 与字典同为全局引用数据, 不做租户隔离。
+- 路由断言按受众前缀组织: 面向 Admin 的路由匹配 `/admin-api/**` 并原样转发、不配 StripPrefix——服务本体经 `aspen-common-web` 的包前缀机制 (Controller 按 `controller/admin|app` 分目录) 原生携带同一前缀, 网关与服务路径完全一致; `internal/**` 端点永不进入网关路由。`upm_permission_api.path_pattern` 同样存含前缀的完整公开路径, `application` 列取值即受众标识 (`admin-api`/`app-api`)。
 - `uri` 只允许 `lb://` (经 Nacos 服务发现负载均衡) 与 `http://`、`https://` 直连地址, 由 Service 写入时校验; `predicates` 与 `filters` 以 `[{name, args}]` 结构类型化存储, Gateway 侧解析为 Spring Cloud Gateway 定义; `metadata` 保存路由级参数 (如 response-timeout)。
 - `sort_order` 映射路由匹配顺序, 数值小者先匹配; `status=disabled` 的路由不进入发布快照, 停用即从 Gateway 生效面移除。
 - 发布链路: 路由增删改事务提交后与 Admin 启动时, Service 全量构建带单调递增版本号的 JSON 信封, 一条 `SET` 原子替换 Redis 单 Key, 并经 Pub/Sub 频道携带版本号通知 Gateway 刷新。Redis 只是分发介质, `sys_route` 是唯一权威源, 可随时全量重建; 版本号比对防止乱序。列内 JSON 结构损坏在行映射阶段整体失败并告警, 结构合法但语义非法的单行 (如缺断言) 跳过并告警。
 - Gateway 通过只读 `RouteDefinitionRepository` 消费快照, 运行期不访问 Redis, 已加载路由不受 Redis 故障影响; actuator 直写路由被禁止, 数据库是唯一写入通道。路由管理 HTTP 契约按 §5 同款 internal 模式默认关闭, RBAC 就绪后转正式管理 API。
 - 变更通知不持久, Gateway 断线期间的发布靠下次变更或重启自愈; 周期对账在统一任务服务建立后接入, 此前不引入临时 @Scheduled。
-- 分发协议的全部锚点收敛在 `aspen-common-gateway` 模块: `contract` 包的快照契约类型定义信封结构, `GatewayRouteContract` 定义 Redis Key、通知频道与 environment 规则, `publish`/`consume` 包提供发布原语与消费 SDK, Admin 与 Gateway 各自引入该模块对接。修改分发协议时只改 common-gateway 一处, 禁止两侧私拼 Key/频道字符串或自定信封字段。
+- 分发协议的全部锚点收敛在 common 侧两个模块: `aspen-common-gateway-contract` (纯契约, 零基础设施依赖, 信封结构类型与 `GatewayRouteContract` 的 Redis Key、通知频道、environment 规则) 与 `aspen-common-gateway` (`publish`/`consume` 发布原语与消费 SDK), Admin 与 Gateway 各自引入对接。修改分发协议时只改这两处, 禁止两侧私拼 Key/频道字符串或自定信封字段。
 - 职责边界: common-gateway 只承载协议与介质操作 (取号、原子替换、通知、加载持有), `sys_route` 的领域读取、行到快照的转换、变更事件与启动编排永远留在 Admin (sys 的领域职责); Spring Cloud Gateway 的路由映射与刷新集成留在网关进程。
+- 演进边界与抽取决策 (2026-09-07 留档): 原条款要求「第二个消费者出现之前禁止预建 common-gateway 类公共包」, 本次抽取依据与之不同且已实际成立——迁移前双侧已有真实重复实现: Admin 侧持有 `RoutePublishProperties` 与 Redis 发布逻辑, Gateway 侧持有另一份 `GatewayRouteProperties` 与信封解析, environment 取值一旦漂移两侧会静默读写不同 Key 且无编译期信号; 同时发布/消费 SDK 属运行设施, 不能落入 admin-api 契约边界。因此契约下沉纯契约模块 gateway-contract (供 api 引用), SDK 落 common-gateway (仅供运行进程依赖)。后续仍以真实消费者为准: 在出现第二个读侧消费者 (如运维路由查询工具) 之前, 读侧 SDK 不再拆分更细的公共包, 防止公共模块绑死 sys 业务域与 Spring Cloud Gateway 实现。
 
 ## 8. 可用性与恢复语义
 
@@ -81,4 +84,4 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/sys/
 
 ## 9. Schema 管理
 
-初始迁移为 `V002__create_sys_schema.sql`, 版本号在整个 Admin Schema 内全局唯一 (UPM 已使用 `V001`)。路由表迁移为 `V003__create_sys_route.sql`, 并附带 aspen-admin 自举路由种子——Gateway 到 Admin 的首条路由无法经路由表自身发布, 由种子数据保证。所有表使用 InnoDB、`utf8mb4` 和 `utf8mb4_0900_ai_ci`。后续变化采用新的前向迁移, 并遵循扩展、迁移、切换、清理顺序; 生产环境禁止依赖 Jimmer 自动建表或修改结构。
+初始迁移为 `V002__create_sys_schema.sql`, 版本号在整个 Admin Schema 内全局唯一 (UPM 已使用 `V001`)。路由表迁移为 `V003__create_sys_route.sql`, 并附带 aspen-admin 自举路由种子——Gateway 到 Admin 的首条路由无法经路由表自身发布, 由种子数据保证; `V004__align_admin_route_prefix.sql` 把种子断言对齐为 `/admin-api/**`、移除 StripPrefix, 并把目标服务名修正为注册名 `lb://aspen-admin-biz`。所有表使用 InnoDB、`utf8mb4` 和 `utf8mb4_0900_ai_ci`。后续变化采用新的前向迁移, 并遵循扩展、迁移、切换、清理顺序; 生产环境禁止依赖 Jimmer 自动建表或修改结构。

@@ -8,6 +8,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
 
@@ -23,7 +26,13 @@ interface UpmUserCredentialEntity : TenantScopedEntity, MutableAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val userCredentialId: Long
 
-    /** 所属用户主键; 用户物理删除时级联删除凭证 */
+    /** 所属用户; 用户物理删除时级联删除凭证 */
+    @ManyToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
+    val user: UpmUserEntity
+
+    /** 所属用户主键; user 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("user")
     val userId: Long
 
     /** 凭证类型, 约定取值为 password/passkey 等; 同用户同类型唯一, 新类型先并存再切换 */

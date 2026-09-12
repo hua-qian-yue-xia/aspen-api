@@ -1,6 +1,5 @@
 package com.zax.aspen.gateway.route
 
-import jakarta.annotation.Resource
 import org.slf4j.LoggerFactory
 import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
 import org.springframework.cloud.gateway.event.RefreshRoutesEvent
@@ -15,12 +14,10 @@ import org.springframework.stereotype.Component
  * 断线期间的变更靠下次通知或重启自愈
  */
 @Component
-class RouteRefreshListener {
-    @Resource
-    private lateinit var routeSnapshotStore: RouteSnapshotStore
-
-    @Resource
-    private lateinit var applicationEventPublisher: ApplicationEventPublisher
+class RouteRefreshListener(
+    private val routeSnapshotStore: RouteSnapshotStore,
+    private val applicationEventPublisher: ApplicationEventPublisher,
+) {
     /**
      * 处理一条刷新通知, 消息体为快照版本号字符串
      *

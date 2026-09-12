@@ -3,7 +3,6 @@ package com.zax.aspen.gateway.route
 import com.zax.aspen.common.cache.support.AspenRedisOperations
 import com.zax.aspen.common.gateway.GatewayRouteProperties
 import com.zax.aspen.common.gateway.contract.GatewayRouteContract
-import jakarta.annotation.Resource
 import org.slf4j.LoggerFactory
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
@@ -16,16 +15,11 @@ import org.springframework.stereotype.Component
  * 管理, 网络分区恢复后订阅自动重连, 错过的通知由下次变更或重启自愈
  */
 @Component
-class RouteRefreshSubscription : ApplicationRunner {
-    @Resource
-    private lateinit var aspenRedisOperations: AspenRedisOperations
-
-    @Resource
-    private lateinit var routeRefreshListener: RouteRefreshListener
-
-    @Resource
-    private lateinit var gatewayRouteProperties: GatewayRouteProperties
-
+class RouteRefreshSubscription(
+    private val aspenRedisOperations: AspenRedisOperations,
+    private val routeRefreshListener: RouteRefreshListener,
+    private val gatewayRouteProperties: GatewayRouteProperties,
+) : ApplicationRunner {
     override fun run(args: ApplicationArguments) {
         try {
             aspenRedisOperations.subscribe(

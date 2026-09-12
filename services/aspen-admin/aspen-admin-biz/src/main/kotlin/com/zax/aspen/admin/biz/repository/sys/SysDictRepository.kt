@@ -18,7 +18,6 @@ import com.zax.aspen.admin.biz.entity.sys.updatedBy
 import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.core.gen.GenDictDescriptor
 import com.zax.aspen.common.core.gen.GenDictItemDescriptor
-import jakarta.annotation.Resource
 import org.babyfish.jimmer.sql.ast.mutation.SaveMode
 import org.babyfish.jimmer.sql.kt.KSqlClient
 import org.babyfish.jimmer.sql.kt.ast.expression.asc
@@ -35,13 +34,10 @@ import java.time.LocalDateTime
  * common-gen 的目录扫描与启动投递, 不影响本仓储的装配
  */
 @Repository
-class SysDictRepository {
-    @Resource
-    private lateinit var sqlClient: KSqlClient
-
-    @Resource
-    private lateinit var clock: Clock
-
+class SysDictRepository(
+    private val sqlClient: KSqlClient,
+    private val clock: Clock,
+) {
     /**
      * 按编码查找未删除字典
      *

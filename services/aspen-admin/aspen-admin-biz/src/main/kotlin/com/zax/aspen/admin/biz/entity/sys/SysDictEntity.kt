@@ -7,6 +7,7 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.OneToMany
 import org.babyfish.jimmer.sql.Table
 
 /**
@@ -40,4 +41,8 @@ interface SysDictEntity : MutableAuditEntity {
     /** 字典启停状态; disabled 后该字典不参与下拉渲染与值翻译, 已保存的历史值不受影响 */
     @Default("ENABLED")
     val status: EnabledStatus
+
+    /** 字典全部字典项; 下拉选项与值翻译取数使用; 字典物理删除时级联删除 */
+    @OneToMany(mappedBy = "dict")
+    val dictItems: List<SysDictItemEntity>
 }

@@ -8,6 +8,10 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
+import org.babyfish.jimmer.sql.OneToMany
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
 
@@ -33,7 +37,13 @@ interface UpmRoleEntity : TenantScopedEntity, MutableAuditEntity {
     @Default("business")
     val roleType: String
 
-    /** 角色归属部门主键; 部门管理员只能分配本部门拥有的角色; 为空表示租户级角色 */
+    /** 角色归属部门; 部门管理员只能分配本部门拥有的角色; 为空表示租户级角色; 归属部门被删除时置空 */
+    @ManyToOne
+    @JoinColumn(name = "owner_dept_id", referencedColumnName = "dept_id")
+    val ownerDept: UpmDeptEntity?
+
+    /** 归属部门主键; ownerDept 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("ownerDept")
     val ownerDeptId: Long?
 
     /** 默认数据范围, 约定取值为 self/dept/dept_and_children/custom/all; custom 时按 upm_role_dept 展开 */
@@ -68,4 +78,28 @@ interface UpmRoleEntity : TenantScopedEntity, MutableAuditEntity {
 
     /** 角色描述, 说明角色的用途与使用范围 */
     val description: String?
+
+    /** 被授予本角色的用户授权; 用户权限计算与角色成员管理使用 */
+    @OneToMany(mappedBy = "role")
+    val userRoles: List<UpmUserRoleEntity>
+
+    /** 本角色的自定义部门数据范围; dataScope 为 custom 时展开使用 */
+    @OneToMany(mappedBy = "role")
+    val roleDepts: List<UpmRoleDeptEntity>
+
+    /** 本角色授权的菜单; 角色菜单树渲染使用 */
+    @OneToMany(mappedBy = "role")
+    val roleMenus: List<UpmRoleMenuEntity>
+
+    /** 本角色授权的后端权限; 角色权限计算使用 */
+    @OneToMany(mappedBy = "role")
+    val rolePermissions: List<UpmRolePermissionEntity>
+
+    /** 本角色作为父角色的继承行, 即权限向哪些子角色传递; 环校验与继承展开使用 */
+    @OneToMany(mappedBy = "parentRole")
+    val parentRoleInheritances: List<UpmRoleInheritanceEntity>
+
+    /** 本角色作为子角色的继承行, 即权限继承自哪些父角色; 权限合并计算使用 */
+    @OneToMany(mappedBy = "childRole")
+    val childRoleInheritances: List<UpmRoleInheritanceEntity>
 }

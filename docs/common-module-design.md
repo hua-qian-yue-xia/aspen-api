@@ -1,7 +1,7 @@
 # Aspen Common 基础模块设计
 
-> 文档状态：core/gen/database/cache 首版已实现，`aspen-common-web` 待建  
-> 文档基线：2026-09-06  
+> 文档状态：core/gen/database/cache/gateway/web 首版已实现  
+> 文档基线：2026-09-12  
 > 关联文档：[技术架构](./technical-architecture.md)
 
 ## 1. 目的与边界
@@ -14,7 +14,9 @@ aspen-common/
 ├── aspen-common-gen/
 ├── aspen-common-database/
 ├── aspen-common-cache/
-└── aspen-common-gateway/
+├── aspen-common-gateway-contract/
+├── aspen-common-gateway/
+└── aspen-common-web/
 ```
 
 依赖方向只有：
@@ -23,10 +25,12 @@ aspen-common/
 aspen-common-database -> aspen-common-core
 aspen-common-cache    -> aspen-common-core
 aspen-common-gen      -> aspen-common-core
-aspen-common-gateway  -> aspen-common-cache
+aspen-common-gateway-contract -> (零项目依赖)
+aspen-common-gateway  -> aspen-common-cache, aspen-common-gateway-contract
+aspen-common-web      -> aspen-common-core
 ```
 
-`core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；`gateway` 只依赖 `cache` 取 Redis 分发原语，不依赖 `database`；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。
+`core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；`gateway-contract` 与 `core` 同级，同样零基础设施依赖，因此可被 `api` 安全引用；`gateway` 只依赖 `cache` 取 Redis 分发原语并依赖 `gateway-contract` 承载纯契约，不依赖 `database`；`web` 承载 MVC 运行约定（受众路径前缀、错误契约、Trace ID），只依赖 `core` 的错误契约类型；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。
 
 源码注释遵守项目统一规范：注释正文使用中文，专有名称保留原文，标点使用英文字符，句尾不加句号。类、接口、枚举、对象、字段和方法必须有说明职责或约束的有效 KDoc，重要实现边界补充行注释。方法 KDoc 必须采用完整块格式（概述段 + 空行 + 每个参数的 `@param` + 非 `Unit` 返回的 `@return`），禁止只有单行概述的方法注释；该规则由根模块 KDoc 纪律测试强制。数据库实体和字段的 KDoc 必须详尽：类级注释说明职责与典型使用场景，字段有具体使用场景、取值约定、生命周期或对其他流程的影响时必须逐一写清楚，仅列名自解释且无附加语义的简单字段可不写字段注释。Jimmer 实体列名与属性名蛇形一致时不声明 `@Column`，由 Jimmer 自动解析，该规则由架构测试强制检查。完整规则和示例见《技术架构》7.8 节。
 
@@ -64,7 +68,7 @@ aspen-common-gateway  -> aspen-common-cache
 | `GenDict` | 枚举字典镜像声明注解（`gen` 包）：code/name/group 对应 `sys_dict` 的 `dict_code`/`dict_name`/`dict_group`, 仅标注 `AspenEnum` 枚举, 框架无关 |
 | `GenDictDescriptor` / `GenDictItemDescriptor` | 枚举字典扫描产物与跨服务上报模型（`gen` 包）, 构造时校验编码、分组格式与项值唯一, 可直接进入 HTTP 契约 |
 
-业务错误码仍归拥有者 `*-api/error/{group}`。成功 HTTP 响应直接返回 DTO/VO；后续 `aspen-common-web` 将 `BusinessException` 转换为 RFC 9457 Problem Details，并保留正确 HTTP 状态码。core 不提供 `R<T>` 或 `ApiResponse<T>`。
+业务错误码仍归拥有者 `*-api/error/{group}`。成功 HTTP 响应直接返回 DTO/VO；`aspen-common-web` 已把 `BusinessException` 统一转换为 RFC 9457 Problem Details 并保留正确 HTTP 状态码（§8），不提供 `R<T>` 或 `ApiResponse<T>` 包装。
 
 错误契约中的机器错误码保持稳定英文，例如 `COMMON.INVALID_ARGUMENT`；默认错误消息和允许返回给调用方的 `BusinessException.detail` 统一使用中文。Java 类型、Cache 名称、数据库结构、下游地址和原始异常消息不得进入对外 `detail`，只允许写入受控日志或保存在异常 `cause` 中。
 
@@ -183,7 +187,7 @@ val cached = cacheOperations.get<UserView>("upm-user", key)
 - 调用点只能调用工厂函数构造 `CacheKey`，禁止手写 `CacheKey(...)`、group/domain 字面量和业务 ID 到 Key 段的 `toString()` 拼接；转换逻辑收在工厂内。
 - 工厂函数与缓存 domain 一一对应，参数只接收业务标识（如 `userId: Long`）；复合键的段顺序属于调用契约，由工厂函数签名固化，调用方不得自行调换。
 - 条目不预置：新工厂函数与配置中心对应 Cache 声明的 `group`/`domain`/`ttl`、第一个真实消费方同时落地，禁止为将来可能缓存的对象预留条目。
-- 工厂与配置声明中的 group/domain 属于双处声明，运行时由 `CacheSettings.definition` 的一致性校验兜底；仓库内由根模块中央边界测试 `CacheKeyFactoryBoundaryTest` 强制工厂之外不出现裸构造，键工厂文件必须位于服务 `cache/` 包。
+- 工厂与配置声明中的 group/domain 属于双处声明，运行时由 `CacheSettings.definition` 的一致性校验兜底；仓库内由架构测试模块 `aspen-architecture-test` 的中央边界测试 `CacheKeyFactoryBoundaryTest` 强制工厂之外不出现裸构造，键工厂文件必须位于服务 `cache/` 包。
 
 `AspenCacheOperations` 第一版提供以下受控操作：
 
@@ -224,7 +228,7 @@ val cached = cacheOperations.get<UserView>("upm-user", key)
 
 使用边界：
 
-- 只用于「缓存语义不适用」的场景：权威数据在数据库、Redis 只是可随时全量重建的分发介质，或单调计数与轻量变更通知；每个使用场景必须在本节登记，首个登记场景为网关路由快照分发（Admin 发布、Gateway 只读消费，Key 与频道由 admin-api 的 `constant` 契约定义）。
+- 只用于「缓存语义不适用」的场景：权威数据在数据库、Redis 只是可随时全量重建的分发介质，或单调计数与轻量变更通知；每个使用场景必须在本节登记，首个登记场景为网关路由快照分发（Admin 发布、Gateway 只读消费，Key 与频道由 `aspen-common-gateway-contract` 的 `GatewayRouteContract` 定义）。
 - Key 不经过 `CacheKeyBuilder` 命名空间（跨服务共享键含 service 段无法对齐），由使用方契约常量统一定义并自行校验格式；缓存语义的数据仍必须走 `AspenCacheOperations`，禁止用本原语绕过 TTL 治理。
 - `subscribe` 不提供可靠投递、重放或死信，断线期间的变更由使用方定义的自愈路径兜底（路由场景为下次变更或重启重发布）；可靠业务事件继续使用 RocketMQ。
 
@@ -232,14 +236,19 @@ common-cache 第一版不包含分布式锁、幂等、限流或任务锁。可�
 
 ## 6. Gateway
 
-包根为 `com.zax.aspen.common.gateway`。网关路由分发公共模块, 承载 Admin 与 Gateway 共用的分发协议与介质操作:
+路由分发的公共能力由两个模块承载，包根同为 `com.zax.aspen.common.gateway`。
+
+`aspen-common-gateway-contract` 是纯契约模块，与 core 同级、零项目依赖、零基础设施依赖，可被 `api` 安全引用（契约消费方不会因此传递任何运行时）:
 
 - `contract/GatewayRouteContract`：路由分发介质的 Redis Key、版本计数器 Key 与通知频道约定，附带 environment 格式校验；双方禁止私拼字符串。
 - `contract/RouteCatalogSnapshot`、`RouteDefinitionSnapshot`、`RouteDefinitionPart`：信封与结构契约，构造期校验协议、语法与断言存在性，非法路由进介质前即失败。
+
+`aspen-common-gateway` 承载发布/消费 SDK 与自动装配，只被实际运行的进程依赖:
+
 - `GatewayRouteProperties`：`aspen.routes.environment` 配置绑定，发布侧与消费侧共用同一配置类，杜绝两侧取值漂移。
-- `publish/RouteEnvelopePublisher`：发布原语，取号（INCR）→ 组装信封 → 一条 SET 原子替换 → Pub/Sub 携带版本号通知；不关心路由来源。
+- `publish/RouteEnvelopePublisher`：发布原语，取号（INCR）→ 组装信封 → 一条 SET 原子替换 → Pub/Sub 携带版本号通知；不关心路由来源；发布时刻优先复用容器既有 Clock（如 common-database 的审计时钟），容器未声明时回退部署域默认时区，本模块不注册兜底 Clock Bean。
 - `consume/RouteSnapshotStore`：消费 SDK，从 Redis 加载并持有内存快照，两段式解析（信封级损坏保留旧快照、单条损坏跳过），运行期零 Redis 访问。
-- `AspenGatewayAutoConfiguration`：自动装配上述设施并注册 `aspen.routes` 配置绑定。
+- `AspenGatewayAutoConfiguration`：对齐 common-cache 的装配模式，`after` 固定在其后求值且仅当容器真实产出 `AspenRedisOperations` 时注册；无 Redis 的服务静默退避。
 
 职责边界: `sys_route` 的领域读取、行到快照的转换、变更事件与启动编排留在 Admin；Spring Cloud Gateway 的路由映射与刷新集成留在网关进程；本模块不依赖任何业务模块与网关类库，Redis 访问经 common-cache 的 `AspenRedisOperations`。
 
@@ -264,16 +273,81 @@ aspen:
 
 后续真正的代码生成能力 (如前端客户端生成) 落入本模块时, 必须同样遵守「只依赖 core、不触碰持久化」的边界。
 
-## 7. 服务接入与验收
+## 8. Web
 
-`api` 最多依赖 core；`database` 和 `cache` 只允许由实际运行的 `biz` 按需依赖。Admin Biz 已因 UPM 持久化模型引入 common-database、Jimmer KSP 和 MySQL 驱动，但仍未引入 common-cache。无外部数据库的上下文测试只在测试范围排除数据源与 Jimmer 自动装配，生产配置不允许借此绕过数据库依赖。
+包根为 `com.zax.aspen.common.web`。公共 Web 运行约定模块，首版提供受众路径前缀、统一错误契约与 Trace ID：
+
+- `AspenWebProperties`：`aspen.web` 配置绑定，声明管理端、用户端与设备端三组「前缀 + Controller 包匹配规则」，默认值即平台约定，部署可整体改写前缀而不改代码。
+- `AspenWebAutoConfiguration`：实现 `WebMvcConfigurer`，在路径映射注册期按 Controller 类的包名给 `@RestController` 统一追加受众前缀；匹配对象是包名（Ant 规则、点号分隔），不是 URL。
+- `trace/TraceId`：Trace ID 常量与生成器——`X-Trace-Id` 请求/响应头、MDC key `traceId`、8 字节 SecureRandom 的 16 位小写十六进制生成；外来值只接受 1-64 位 `[A-Za-z0-9_-]`，防止日志注入。
+- `trace/AspenTraceIdFilter`：请求进入时读 `X-Trace-Id`（合法则复用、非法或缺失则生成），写入 MDC 并回写响应头，请求结束清理 MDC；注册序为最高优先级，覆盖完整请求周期。
+- `error/AspenErrorCodeStatusMapper`：`ErrorCode` 到 HTTP 状态的映射，core 刻意不含 HTTP 语义，映射归 Web 层拥有；公共码精确映射，未登记的业务错误码默认 400。
+- `error/AspenWebExceptionHandler`：`@RestControllerAdvice` 统一错误渲染（规则见下）。
+
+```yaml
+aspen:
+  web:
+    admin-api:
+      prefix: /admin-api
+      controller: "**.controller.admin.**"
+    app-api:
+      prefix: /app-api
+      controller: "**.controller.app.**"
+    device-api:
+      prefix: /device-api
+      controller: "**.controller.device.**"
+```
+
+配套约定：
+
+- `biz` 的 Controller 按受众分目录：`controller/admin/{module}`、`controller/app/{module}`、`controller/device/{module}`、`controller/internal/{module}`（见《技术架构》7.5）；契约接口的 `PATH` 常量只写受众后的模块相对路径（如 `/sys/route`），前缀由 Controller 包位置决定，`api` 与 `biz` 都不得在路径常量里硬编码受众前缀。
+- 命中受众规则的映射获得对应前缀，`internal` 及其余包不命中任何规则、不加前缀；internal 端点因此天然保持「不经网关暴露」的定位。
+- 网关按 `/admin-api/**`、`/app-api/**`、`/device-api/**` 原样转发（不配 StripPrefix），服务本体与公开路径完全一致；RBAC 的 `upm_permission_api.path_pattern` 存含前缀的完整公开路径，`application` 列取值即受众标识（`admin-api`/`app-api`/`device-api`）。
+- 模块只在 Spring MVC（servlet）类路径存在时装配；WebFlux 服务引入本模块会静默退避，不注册任何 Bean。spring-webmvc 是内部实现依赖，不经 `api` 传递，使用方自带 `spring-boot-starter-webmvc`。
+
+### 8.1 统一错误契约
+
+成功响应直接返回 DTO/VO，不套任何信封；失败响应统一为 RFC 9457 Problem Details（`application/problem+json`）：
+
+```json
+{
+  "type": "about:blank",
+  "title": "资源状态不允许执行当前操作",
+  "status": 409,
+  "detail": "路由已停用, 拒绝修改",
+  "instance": "/admin-api/sys/route",
+  "code": "COMMON.STATE_CONFLICT",
+  "traceId": "3f9c2a7b81d04e55"
+}
+```
+
+规则：
+
+- `title` 取 `ErrorCode.defaultMessage`，`detail` 取 `BusinessException.detail`（必须可安全返回给调用方，敏感诊断只进日志或 `cause`）；`code` 与 `traceId` 是扩展字段，前者是稳定机器错误码，后者用于排查。
+- `type` 在错误文档站真实存在前保持默认 `about:blank`，机器判别一律以 `code` 为准；不凭空发明会漂移的 URI。
+- 状态映射：`INVALID_ARGUMENT`→400、`RESOURCE_NOT_FOUND`→404、`STATE_CONFLICT`→409、`DEPENDENCY_UNAVAILABLE`→503、`INTERNAL_ERROR`→500；未登记的业务错误码默认 400，需要精确状态码时在映射表登记。
+- 参数校验失败（`@Valid` 请求体/方法级校验）、不可读请求体统一映射为 400 `COMMON.INVALID_ARGUMENT`；未匹配路由统一 404 `COMMON.RESOURCE_NOT_FOUND`；兜底异常统一 500 `COMMON.INTERNAL_ERROR` 且 `detail` 只给安全消息，原始异常与堆栈只随 traceId 写日志。
+
+### 8.2 Trace ID
+
+- 每个请求一个 traceId：请求头 `X-Trace-Id` 合法则复用（网关或调用方透传），否则服务本地生成；所有响应（成功与失败）都回写 `X-Trace-Id` 响应头，失败 body 的 `traceId` 字段与其一致。
+- 日志关联：filter 把 traceId 写入 MDC，各服务以 `logging.pattern.level` 注入日志模式（Nacos `aspen-common` 统一下发），该请求期间每一行日志都携带同一 traceId；用户报 ID → 按日志 traceId 检索即可还原完整请求链路。
+- 网关最终负责 Trace ID 的建立与跨服务透传（《技术架构》§9）；在其落地前，服务侧「有 header 用 header、无则自生成」的兜底保证单服务直连开发可用，网关能力落地时零改动。
+
+首版不提供 `R<T>` 包装、参数校验增强或 Trace 传播（W3C traceparent/Micrometer Tracing）；Problem Details 的 `type` 指向错误文档站、以及 Trace 上下文跨服务延续，在对应基础设施建立后再纳入本模块。
+
+## 9. 服务接入与验收
+
+`api` 最多依赖 core；`database` 和 `cache` 只允许由实际运行的 `biz` 按需依赖；`web` 由承载 MVC Controller 的 `biz` 引入，获得受众路径前缀（Admin Biz 已接入，Storage 在出现首个 Controller 时接入）。Admin Biz 已因 UPM 持久化模型引入 common-database、Jimmer KSP 和 MySQL 驱动，但仍未引入 common-cache。无外部数据库的上下文测试只在测试范围排除数据源与 Jimmer 自动装配，生产配置不允许借此绕过数据库依赖。
 
 根 Gradle 配置在依赖声明阶段执行以下边界校验，即使模块暂无源码也不能绕过：
 
 - core 禁止依赖其他项目模块、Spring、Jackson、Jimmer 或 Redis。
 - database/cache/gen 只能依赖 core, 三者不互相依赖。
+- gateway 只能依赖 cache 与 gateway-contract, 不依赖 database; gateway-contract 与 core 同级, 零项目依赖。
+- web 只依赖 core (错误契约类型), 不依赖 database/cache/gateway。
 - 所有 common 模块禁止依赖 `services` 目录下的模块。
-- API 模块禁止依赖 database/cache、Jimmer、Spring Data、Redis 或 Spring Boot Starter。
+- API 模块禁止依赖 database/cache、Jimmer、Spring Data、Redis 或 Spring Boot Starter; 路由契约例外只经纯契约模块 gateway-contract 进入。
 - 所有模块禁止 JPA/Hibernate、MyBatis/MyBatis-Plus、Seata 和 Dubbo，并禁止动态或变化版本。
 
 Testcontainers 的 JUnit Jupiter 和 MySQL 依赖别名已经登记在版本目录中，版本继续由 Spring Boot BOM 管理。Admin 的 @GenDict 播种已落地首个真实 Repository 集成测试, 使用 Testcontainers MySQL 执行迁移与写路径验证; 其余 common 测试仍不连接外部 MySQL 或 Redis。
@@ -281,9 +355,11 @@ Testcontainers 的 JUnit Jupiter 和 MySQL 依赖别名已经登记在版本目�
 验收必须满足：
 
 1. core 编译类路径不包含 Spring、Jimmer 或 Redis。
-2. common 不依赖任何 service，database/cache 不互相依赖。
+2. common 不依赖任何 service，database/cache 不互相依赖，gateway 不依赖 database，gateway-contract 编译类路径不包含 Spring、Jackson 或 Redis。
 3. 公共 Jimmer 映射接口能够被测试 Entity 组合继承并通过 KSP，Jimmer 元数据能识别乐观锁和逻辑删除。
 4. 非法分页、批次、Cache、TTL、Key、业务组白名单和大小配置启动失败。
 5. 用户提供的 Clock、数据库限制、审计拦截器、CacheManager、RedisTemplate 或 CacheOperations 可以覆盖默认 Bean。
 6. 未声明 Cache 默认不可创建，Redis 故障不会被公共层吞掉。
 7. 完整 Gradle `check` 与 Admin 启动测试通过。
+8. `controller/admin`、`controller/app` 与 `controller/device` 包下的 `@RestController` 映射分别携带 `/admin-api`、`/app-api`、`/device-api` 前缀，`internal` 及其余包不加前缀；前缀可经 `aspen.web.*` 配置整体覆盖。
+9. 失败响应统一 `application/problem+json`，携带 `code`（机器错误码）与 `traceId`，HTTP 状态与错误码映射一致，兜底异常不泄露内部细节；成功响应直接返回 DTO/VO 且带 `X-Trace-Id` 响应头，body 内 `traceId` 与响应头一致。

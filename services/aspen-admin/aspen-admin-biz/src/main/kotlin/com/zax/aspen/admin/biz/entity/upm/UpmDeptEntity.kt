@@ -8,6 +8,10 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
+import org.babyfish.jimmer.sql.OneToMany
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
 
@@ -24,7 +28,13 @@ interface UpmDeptEntity : TenantScopedEntity, MutableAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val deptId: Long
 
-    /** 父部门主键; 为空表示根部门; 移动部门时由 Service 同步重建 ancestorPath 与闭包表 */
+    /** 父部门; 为空表示根部门; 移动部门时由 Service 同步重建 ancestorPath 与闭包表; 自引用不设数据库外键, 由 Service 校验环 */
+    @ManyToOne
+    @JoinColumn(name = "parent_id", referencedColumnName = "dept_id")
+    val parent: UpmDeptEntity?
+
+    /** 父部门主键; parent 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("parent")
     val parentId: Long?
 
     /** 部门编码, 租户内唯一; 业务系统与报表的部门引用键 */
@@ -51,7 +61,13 @@ interface UpmDeptEntity : TenantScopedEntity, MutableAuditEntity {
     @Default("0")
     val level: Int
 
-    /** 部门第一负责人主键; 审批与通讯录展示; 多类型负责人见 upm_dept_leader */
+    /** 部门第一负责人; 审批与通讯录展示; 多类型负责人见 upm_dept_leader; 引用列不设数据库外键, 由 Service 保证指向在职用户 */
+    @ManyToOne
+    @JoinColumn(name = "primary_leader_user_id", referencedColumnName = "user_id")
+    val primaryLeaderUser: UpmUserEntity?
+
+    /** 第一负责人主键; primaryLeaderUser 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("primaryLeaderUser")
     val primaryLeaderUserId: Long?
 
     /** 虚拟部门标记; 虚拟部门不参与成本与编制统计, 仅用于权限分组 */
@@ -98,4 +114,28 @@ interface UpmDeptEntity : TenantScopedEntity, MutableAuditEntity {
     /** 在职成员数冗余; 通讯录统计使用, 由 Service 维护 */
     @Default("0")
     val memberCount: Int
+
+    /** 直接子部门; 组织树逐级渲染使用, 全量查询走闭包表; 引用列不设数据库外键 */
+    @OneToMany(mappedBy = "parent")
+    val children: List<UpmDeptEntity>
+
+    /** 部门全部任职关系; 通讯录成员列表与数据权限展开使用 */
+    @OneToMany(mappedBy = "dept")
+    val userDepts: List<UpmUserDeptEntity>
+
+    /** 本部门作为祖先的闭包行; 「本部门及下级」数据范围展开使用 */
+    @OneToMany(mappedBy = "ancestor")
+    val ancestorClosures: List<UpmDeptClosureEntity>
+
+    /** 本部门作为后代的闭包行; 查询祖先链与层级校验使用 */
+    @OneToMany(mappedBy = "descendant")
+    val descendantClosures: List<UpmDeptClosureEntity>
+
+    /** 部门全部负责人; 第一负责人之外的类型以此为准 */
+    @OneToMany(mappedBy = "dept")
+    val deptLeaders: List<UpmDeptLeaderEntity>
+
+    /** 以本部门为自定义数据范围的角色; 角色数据范围管理使用 */
+    @OneToMany(mappedBy = "dept")
+    val roleDepts: List<UpmRoleDeptEntity>
 }

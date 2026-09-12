@@ -8,6 +8,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
 
@@ -24,10 +27,22 @@ interface UpmDeptLeaderEntity : TenantScopedEntity, CreateAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val deptLeaderId: Long
 
-    /** 部门主键 */
+    /** 负责人所在部门; 部门删除时级联删除负责人关系 */
+    @ManyToOne
+    @JoinColumn(name = "dept_id", referencedColumnName = "dept_id")
+    val dept: UpmDeptEntity
+
+    /** 部门主键; dept 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("dept")
     val deptId: Long
 
-    /** 负责人用户主键 */
+    /** 负责人用户; 用户物理删除时级联删除负责人关系 */
+    @ManyToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
+    val user: UpmUserEntity
+
+    /** 负责人用户主键; user 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("user")
     val userId: Long
 
     /** 负责人类型, 约定取值为 primary/deputy/business 等, 同部门同类型唯一 */

@@ -5,7 +5,6 @@ import com.zax.aspen.common.core.gen.GenDictDescriptor
 import com.zax.aspen.common.gen.autoconfigure.AspenGenProperties
 import com.zax.aspen.common.gen.boot.GenDictSink
 import com.zax.aspen.common.gen.scan.GenDictCatalog
-import jakarta.annotation.Resource
 import org.springframework.stereotype.Service
 
 /**
@@ -16,13 +15,10 @@ import org.springframework.stereotype.Service
  * resync 强制回写展示属性, 不触碰启停、默认项、样式类与父级; 枚举仍是唯一权威取值来源
  */
 @Service
-class GenDictSeeder : GenDictSink {
-    @Resource
-    private lateinit var sysDictRepository: SysDictRepository
-
-    @Resource
-    private lateinit var aspenGenProperties: AspenGenProperties
-
+class GenDictSeeder(
+    private val sysDictRepository: SysDictRepository,
+    private val aspenGenProperties: AspenGenProperties,
+) : GenDictSink {
     override fun deliver(catalog: GenDictCatalog) {
         seed(catalog.descriptors, aspenGenProperties.dict.mode)
     }

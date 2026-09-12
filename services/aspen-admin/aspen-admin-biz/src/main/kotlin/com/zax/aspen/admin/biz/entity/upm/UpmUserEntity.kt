@@ -8,6 +8,10 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
+import org.babyfish.jimmer.sql.OneToMany
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
 
@@ -44,7 +48,13 @@ interface UpmUserEntity : TenantScopedEntity, MutableAuditEntity {
     /** 工号, 企业内唯一标识; 租户内唯一约束, 与外部 HR 系统对账使用 */
     val jobNumber: String?
 
-    /** 主部门主键; 用户多部门任职时的默认数据范围锚点; 引用 upm_user_dept 关系 */
+    /** 主部门任职关系, 指向 upm_user_dept 的主任职行, 是用户多部门任职时的默认数据范围锚点; 与该行的 isPrimary 保持一致, 引用列不设数据库外键 */
+    @ManyToOne
+    @JoinColumn(name = "primary_dept_id", referencedColumnName = "user_dept_id")
+    val primaryDept: UpmUserDeptEntity?
+
+    /** 主部门任职关系主键; primaryDept 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("primaryDept")
     val primaryDeptId: Long?
 
     /** 职位头衔, 通讯录展示; 部门内的任职头衔以 upm_user_dept 为准 */
@@ -124,4 +134,36 @@ interface UpmUserEntity : TenantScopedEntity, MutableAuditEntity {
 
     /** 用户有效期终点; 过期后登录被拒绝; 为空表示长期有效 */
     val validTo: LocalDateTime?
+
+    /** 用户全部凭证; 用户安全详情页与登录凭证校验取数使用; 用户物理删除时级联删除 */
+    @OneToMany(mappedBy = "user")
+    val credentials: List<UpmUserCredentialEntity>
+
+    /** 用户绑定的全部外部身份; 联合登录身份定位与绑定管理使用 */
+    @OneToMany(mappedBy = "user")
+    val identities: List<UpmUserIdentityEntity>
+
+    /** 用户全部任职关系; 通讯录与数据权限按部门展开使用, 主任职行与 primaryDept 一致 */
+    @OneToMany(mappedBy = "user")
+    val userDepts: List<UpmUserDeptEntity>
+
+    /** 用户被授予的全部角色; 权限计算的数据源之一; 撤销保留记录不物理删除 */
+    @OneToMany(mappedBy = "user")
+    val userRoles: List<UpmUserRoleEntity>
+
+    /** 用户直接授权的权限, 含显式拒绝项; 与角色授权合并计算最终权限集 */
+    @OneToMany(mappedBy = "user")
+    val userPermissions: List<UpmUserPermissionEntity>
+
+    /** 用户绑定的多因素认证方式; 登录第二步验证与设备管理使用 */
+    @OneToMany(mappedBy = "user")
+    val mfas: List<UpmUserMfaEntity>
+
+    /** 用户全部会话, 含活跃与已撤销; 在线设备管理与刷新令牌校验使用 */
+    @OneToMany(mappedBy = "user")
+    val sessions: List<UpmUserSessionEntity>
+
+    /** 用户历史密码摘要; 修改密码时校验近期复用使用 */
+    @OneToMany(mappedBy = "user")
+    val passwordHistories: List<UpmPasswordHistoryEntity>
 }

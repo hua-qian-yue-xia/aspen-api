@@ -8,7 +8,6 @@ import com.zax.aspen.common.gateway.contract.RouteDefinitionSnapshot
 import com.zax.aspen.common.gateway.publish.RouteEnvelopePublisher
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
-import org.springframework.test.util.ReflectionTestUtils
 import java.time.LocalDateTime
 import kotlin.test.assertEquals
 
@@ -19,10 +18,7 @@ class RouteDefinitionPublisherTest {
     private val sysRouteRepository: SysRouteRepository = Mockito.mock(SysRouteRepository::class.java)
     private val routeEnvelopePublisher: RouteEnvelopePublisher = Mockito.mock(RouteEnvelopePublisher::class.java)
 
-    private val publisher = RouteDefinitionPublisher().apply {
-        ReflectionTestUtils.setField(this, "sysRouteRepository", sysRouteRepository)
-        ReflectionTestUtils.setField(this, "routeEnvelopePublisher", routeEnvelopePublisher)
-    }
+    private val publisher = RouteDefinitionPublisher(sysRouteRepository, routeEnvelopePublisher)
 
     @Test
     fun `publishes enabled rows through envelope publisher`() {
@@ -43,6 +39,7 @@ class RouteDefinitionPublisherTest {
             listOf(
                 routeEntity(routeId = 1L, routeCode = "aspen-admin"),
                 routeEntity(routeId = 2L, routeCode = "broken-route", uri = "ftp://broken"),
+                routeEntity(routeId = 3L, routeCode = "empty-predicates", predicates = emptyList()),
             ),
         )
         val published = capturePublishedOn(version = 3L)
@@ -50,6 +47,18 @@ class RouteDefinitionPublisherTest {
         publisher.publishAll()
 
         assertEquals(listOf("aspen-admin"), published.flatMap { snapshot -> snapshot.map { it.routeCode } })
+    }
+
+    /** 验证无启用路由时仍以空列表发布空信封, 清空路由是合法的发布形态 */
+    @Test
+    fun `publishes empty envelope when no enabled routes remain`() {
+        Mockito.`when`(sysRouteRepository.findAllEnabled()).thenReturn(emptyList())
+        val published = capturePublishedOn(version = 9L)
+
+        val version = publisher.publishAll()
+
+        assertEquals(9L, version)
+        assertEquals(listOf(emptyList<RouteDefinitionSnapshot>()), published)
     }
 
     /**
@@ -83,21 +92,23 @@ class RouteDefinitionPublisherTest {
      * @param routeId 路由主键, 默认 1L
      * @param routeCode 路由编码, 默认 aspen-admin, 传非法 uri 的编码用于构造坏行
      * @param uri 目标地址, 默认合法的 lb 协议, 传非法协议触发快照构造失败
+     * @param predicates 路由断言列表, 默认一条 Path 断言, 传空列表用于构造无断言坏行
      * @return 固定启用状态的 SysRouteEntity
      */
     private fun routeEntity(
         routeId: Long = 1L,
         routeCode: String = "aspen-admin",
         uri: String = "lb://aspen-admin",
+        predicates: List<com.zax.aspen.common.gateway.contract.RouteDefinitionPart> = listOf(
+            com.zax.aspen.common.gateway.contract.RouteDefinitionPart("Path", mapOf("_genkey_0" to "/admin/**")),
+        ),
     ): SysRouteEntity =
         SysRouteEntityDraft.`$`.produce {
             this.routeId = routeId
             this.routeCode = routeCode
             routeName = "演示服务"
             this.uri = uri
-            predicates = listOf(
-                com.zax.aspen.common.gateway.contract.RouteDefinitionPart("Path", mapOf("_genkey_0" to "/admin/**")),
-            )
+            this.predicates = predicates
             filters = emptyList()
             metadata = null
             sortOrder = 0

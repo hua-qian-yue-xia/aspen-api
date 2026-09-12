@@ -4,6 +4,9 @@ import com.zax.aspen.common.core.enums.common.EnabledStatus
 import org.babyfish.jimmer.meta.ImmutableType
 import org.babyfish.jimmer.sql.Column
 import org.babyfish.jimmer.sql.Default
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.ManyToOne
+import org.babyfish.jimmer.sql.OneToMany
 import org.babyfish.jimmer.sql.Table
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -90,7 +93,7 @@ class SysEntityMappingTest {
         assertTrue("isSensitive" in configType.props)
     }
 
-    /** 验证每个 Jimmer 实体属性蛇形后的列与迁移表字段一一对应 */
+    /** 验证每个 Jimmer 实体属性蛇形后的列与迁移表字段一一对应, 关联与集合属性不映射列, 不参与对比 */
     @Test
     fun `keeps entity columns aligned with the migration`() {
         entityClasses.forEach { entityClass ->
@@ -108,10 +111,42 @@ class SysEntityMappingTest {
                 .map { it.groupValues[1] }
                 .toSet()
             val entityColumns = type.props.values
+                .filter { prop ->
+                    prop.getAnnotation(ManyToOne::class.java) == null &&
+                        prop.getAnnotation(OneToMany::class.java) == null
+                }
                 .map { prop -> prop.name.toSnakeCase() }
                 .toSet()
 
             assertEquals(migrationColumns, entityColumns, "$tableName 的 Entity 与迁移字段不一致")
+        }
+    }
+
+    /** 验证字典对象关联已声明: 字典项挂 dict 与 parent 自引用 (同名 IdView 标量), 字典挂 dictItems 反向集合 */
+    @Test
+    fun `declares dict foreign keys as associations`() {
+        val expectedCounts = mapOf(
+            SysDictEntity::class.java to (0 to 1),
+            SysDictItemEntity::class.java to (2 to 1),
+            SysConfigEntity::class.java to (0 to 0),
+        )
+
+        entityClasses.forEach { entityClass ->
+            val type = ImmutableType.get(entityClass)
+            val manyToOneProps = type.props.values.filter { it.getAnnotation(ManyToOne::class.java) != null }
+            val oneToManyProps = type.props.values.filter { it.getAnnotation(OneToMany::class.java) != null }
+            val (expectedReferences, expectedCollections) = assertNotNull(expectedCounts[entityClass])
+
+            assertEquals(expectedReferences, manyToOneProps.size, "${entityClass.simpleName} 的 ManyToOne 数量不符")
+            assertEquals(expectedCollections, oneToManyProps.size, "${entityClass.simpleName} 的 OneToMany 数量不符")
+
+            type.props.values.forEach { prop ->
+                val idView = prop.getAnnotation(IdView::class.java)
+                if (idView != null) {
+                    val target = assertNotNull(type.props[idView.value], "${entityClass.simpleName}.${prop.name} 的 IdView 指向不存在的关联 ${idView.value}")
+                    assertNotNull(target.getAnnotation(ManyToOne::class.java), "${entityClass.simpleName}.${idView.value} 必须是 ManyToOne")
+                }
+            }
         }
     }
 

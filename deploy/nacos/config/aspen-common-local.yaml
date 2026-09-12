@@ -2,6 +2,12 @@
 # 分层: 代码内安全默认值 < 本文件 < {service}-biz-local.yaml < 受控环境变量/Secret
 # 只承载全服务共享的本地环境配置; 服务私有配置放各自的 {service}-biz-local.yaml
 
+# 日志级别段落注入 MDC traceId (common-web 的 AspenTraceIdFilter 写入),
+# 使该请求期间每一行日志携带同一排查标识; 用户报 traceId 即可按日志检索还原链路
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{traceId:-}]"
+
 aspen:
   routes:
     # 路由分发的 Redis 隔离段, 全服务共享, 必须与代码默认值一致

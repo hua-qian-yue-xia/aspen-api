@@ -3,7 +3,6 @@ package com.zax.aspen.gateway.route
 import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
 import com.zax.aspen.common.gateway.contract.RouteDefinitionPart
 import com.zax.aspen.common.gateway.contract.RouteDefinitionSnapshot
-import jakarta.annotation.Resource
 import org.springframework.cloud.gateway.filter.FilterDefinition
 import org.springframework.cloud.gateway.handler.predicate.PredicateDefinition
 import org.springframework.cloud.gateway.route.RouteDefinition
@@ -21,9 +20,9 @@ import java.net.URI
  * 路由变更只允许经 Admin sys_route 落库后发布, 保证数据库是唯一写入通道
  */
 @Component
-class RedisRouteDefinitionRepository : RouteDefinitionRepository {
-    @Resource
-    private lateinit var routeSnapshotStore: RouteSnapshotStore
+class RedisRouteDefinitionRepository(
+    private val routeSnapshotStore: RouteSnapshotStore,
+) : RouteDefinitionRepository {
     /**
      * 返回内存快照映射的网关路由定义
      *

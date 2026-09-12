@@ -1,0 +1,27 @@
+server:
+  port: 7200
+
+spring:
+  application:
+    # 文件存储服务名, 进程和 Docker 镜像
+    name: aspen-storage-biz
+  config:
+    import:
+      # 配置中心分层: 公共配置在前, 服务私有配置在后; optional 前缀保证本地无 Nacos 也能启动
+      - optional:nacos:aspen-common
+      - optional:nacos:${spring.application.name}
+  # datasource/jimmer/aspen 等运行配置统一放 Nacos 的 aspen-storage-biz, 本文件只保留接线(地址/凭据/命名空间)
+  cloud:
+    nacos:
+      # 地址与凭据经环境变量注入, 默认值仅供本地开发; 生产必须覆盖且密码不得写进配置文件
+      username: ${NACOS_USERNAME}
+      password: ${NACOS_PASSWORD}
+      server-addr: ${NACOS_HOST}:${NACOS_PORT}
+      config:
+        namespace: ${NACOS_NAMESPACE:prod}
+        file-extension: yaml
+
+# Jimmer starter 的语言开关决定 sqlClient Bean 的产出类型:
+# kotlin 时直接产出 KSqlClient, Kotlin Repository 按类型注入, 无需任何桥接 Bean
+jimmer:
+  language: kotlin

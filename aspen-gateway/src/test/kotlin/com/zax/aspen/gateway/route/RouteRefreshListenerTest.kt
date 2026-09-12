@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.springframework.cloud.gateway.event.RefreshRoutesEvent
 import org.springframework.context.ApplicationEventPublisher
-import org.springframework.test.util.ReflectionTestUtils
 
 /**
  * 覆盖刷新通知的版本比对与事件触发
@@ -15,10 +14,7 @@ class RouteRefreshListenerTest {
     private val applicationEventPublisher: ApplicationEventPublisher =
         Mockito.mock(ApplicationEventPublisher::class.java)
 
-    private val listener = RouteRefreshListener().apply {
-        ReflectionTestUtils.setField(this, "routeSnapshotStore", routeSnapshotStore)
-        ReflectionTestUtils.setField(this, "applicationEventPublisher", applicationEventPublisher)
-    }
+    private val listener = RouteRefreshListener(routeSnapshotStore, applicationEventPublisher)
 
     @Test
     fun `newer version refreshes and publishes gateway event`() {

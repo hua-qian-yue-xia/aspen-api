@@ -6,6 +6,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Table
 
 /**
@@ -21,10 +24,22 @@ interface UpmRoleInheritanceEntity : TenantScopedEntity, CreateAuditEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val roleInheritanceId: Long
 
-    /** 父角色主键; 父角色的权限向子角色传递 */
+    /** 父角色; 父角色的权限向子角色传递 */
+    @ManyToOne
+    @JoinColumn(name = "parent_role_id", referencedColumnName = "role_id")
+    val parentRole: UpmRoleEntity
+
+    /** 父角色主键; parentRole 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("parentRole")
     val parentRoleId: Long
 
-    /** 子角色主键 */
+    /** 子角色 */
+    @ManyToOne
+    @JoinColumn(name = "child_role_id", referencedColumnName = "role_id")
+    val childRole: UpmRoleEntity
+
+    /** 子角色主键; childRole 关联的标量视图, 按主键过滤与保存时使用 */
+    @IdView("childRole")
     val childRoleId: Long
 
     /** 传递跳数; 自身为 0, 直接继承为 1; 展开多层继承时使用 */

@@ -1,7 +1,6 @@
 package com.zax.aspen.gateway.health
 
 import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
-import jakarta.annotation.Resource
 import org.springframework.boot.health.contributor.Health
 import org.springframework.boot.health.contributor.HealthIndicator
 import org.springframework.stereotype.Component
@@ -13,10 +12,9 @@ import org.springframework.stereotype.Component
  * 运行期不再访问 Redis, Redis 故障不影响本指示结果
  */
 @Component
-class RouteStoreHealthIndicator : HealthIndicator {
-    @Resource
-    private lateinit var routeSnapshotStore: RouteSnapshotStore
-
+class RouteStoreHealthIndicator(
+    private val routeSnapshotStore: RouteSnapshotStore,
+) : HealthIndicator {
     override fun health(): Health {
         val version = routeSnapshotStore.version
         return if (version == null) {

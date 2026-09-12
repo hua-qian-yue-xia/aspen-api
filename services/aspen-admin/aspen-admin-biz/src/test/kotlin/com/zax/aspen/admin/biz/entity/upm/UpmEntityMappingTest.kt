@@ -5,6 +5,9 @@ import com.zax.aspen.common.core.enums.common.Gender
 import com.zax.aspen.common.core.enums.common.RiskLevel
 import org.babyfish.jimmer.meta.ImmutableType
 import org.babyfish.jimmer.sql.Column
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.ManyToOne
+import org.babyfish.jimmer.sql.OneToMany
 import org.babyfish.jimmer.sql.Table
 import java.util.function.Supplier
 import kotlin.test.Test
@@ -100,7 +103,7 @@ class UpmEntityMappingTest {
         )
     }
 
-    /** 验证每个 Jimmer 实体属性蛇形后的列与迁移表字段一一对应 */
+    /** 验证每个 Jimmer 实体属性蛇形后的列与迁移表字段一一对应, 关联与集合属性不映射列, 不参与对比 */
     @Test
     fun `keeps entity columns aligned with the migration`() {
         entityClasses.forEach { entityClass ->
@@ -118,10 +121,68 @@ class UpmEntityMappingTest {
                 .map { it.groupValues[1] }
                 .toSet()
             val entityColumns = type.props.values
+                .filter { prop ->
+                    prop.getAnnotation(ManyToOne::class.java) == null &&
+                        prop.getAnnotation(OneToMany::class.java) == null
+                }
                 .map { prop -> prop.name.toSnakeCase() }
                 .toSet()
 
             assertEquals(migrationColumns, entityColumns, "$tableName 的 Entity 与迁移字段不一致")
+        }
+    }
+
+    /** 验证迁移外键已全量声明为对象关联: 每实体引用列有 ManyToOne + 同名 IdView, 反向集合按授权图谱与结构组合规则计数 */
+    @Test
+    fun `declares migration foreign keys as associations`() {
+        val expectedCounts = mapOf(
+            UpmTenantEntity::class.java to (0 to 0),
+            UpmUserEntity::class.java to (1 to 8),
+            UpmUserCredentialEntity::class.java to (1 to 0),
+            UpmUserIdentityEntity::class.java to (1 to 0),
+            UpmUserDeptEntity::class.java to (3 to 0),
+            UpmDeptEntity::class.java to (2 to 6),
+            UpmDeptClosureEntity::class.java to (2 to 0),
+            UpmDeptLeaderEntity::class.java to (2 to 0),
+            UpmPasswordHistoryEntity::class.java to (1 to 0),
+            UpmRoleEntity::class.java to (1 to 6),
+            UpmUserRoleEntity::class.java to (5 to 0),
+            UpmRoleDeptEntity::class.java to (2 to 0),
+            UpmRoleInheritanceEntity::class.java to (2 to 0),
+            UpmMenuEntity::class.java to (1 to 3),
+            UpmRoleMenuEntity::class.java to (2 to 0),
+            UpmPermissionEntity::class.java to (0 to 4),
+            UpmPermissionApiEntity::class.java to (1 to 0),
+            UpmRolePermissionEntity::class.java to (2 to 0),
+            UpmMenuPermissionEntity::class.java to (2 to 0),
+            UpmUserPermissionEntity::class.java to (3 to 0),
+            UpmUserSessionEntity::class.java to (2 to 0),
+            UpmUserMfaEntity::class.java to (1 to 0),
+            UpmLoginLogEntity::class.java to (1 to 0),
+            UpmAuthorizationChangeLogEntity::class.java to (1 to 0),
+        )
+        assertEquals(entityClasses.size, expectedCounts.size)
+
+        entityClasses.forEach { entityClass ->
+            val type = ImmutableType.get(entityClass)
+            val manyToOneProps = type.props.values.filter { it.getAnnotation(ManyToOne::class.java) != null }
+            val oneToManyProps = type.props.values.filter { it.getAnnotation(OneToMany::class.java) != null }
+            val (expectedReferences, expectedCollections) = assertNotNull(expectedCounts[entityClass])
+
+            assertEquals(expectedReferences, manyToOneProps.size, "${entityClass.simpleName} 的 ManyToOne 数量不符")
+            assertEquals(expectedCollections, oneToManyProps.size, "${entityClass.simpleName} 的 OneToMany 数量不符")
+
+            type.props.values.forEach { prop ->
+                val idView = prop.getAnnotation(IdView::class.java)
+                if (idView != null) {
+                    val target = assertNotNull(type.props[idView.value], "${entityClass.simpleName}.${prop.name} 的 IdView 指向不存在的关联 ${idView.value}")
+                    assertNotNull(target.getAnnotation(ManyToOne::class.java), "${entityClass.simpleName}.${idView.value} 必须是 ManyToOne")
+                }
+                val oneToMany = prop.getAnnotation(OneToMany::class.java)
+                if (oneToMany != null) {
+                    assertTrue(oneToMany.mappedBy.isNotEmpty(), "${entityClass.simpleName}.${prop.name} 必须声明 mappedBy")
+                }
+            }
         }
     }
 

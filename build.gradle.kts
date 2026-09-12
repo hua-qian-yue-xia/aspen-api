@@ -1,88 +1,10 @@
 import org.gradle.api.artifacts.ProjectDependency
 
-plugins {
-    // 所有插件版本集中在 gradle/libs.versions.toml, 后续子模块必须复用同一基线
-    alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.kotlin.spring)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.spring.boot)
-    alias(libs.plugins.spring.dependency.management)
-}
-
+// 路线图第 12 步已落地: 根模块只保留聚合构建与全仓架构守卫,
+// 不再承载应用源码与运行依赖, 各运行单元由自身模块独立构建 bootJar
 group = "com.zax"
 version = "0.0.1"
 description = "Aspen microservice infrastructure"
-
-java {
-    toolchain {
-        // 编译与运行统一使用 Java 21, 避免依赖开发机当前 JAVA_HOME 的版本
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
-
-dependencyManagement {
-    imports {
-        // Spring Cloud 与 Spring Cloud Alibaba 的组件版本必须由正式 BOM 统一管理
-        // 不在单个依赖上覆盖 Nacos, Sentinel, OpenFeign 或 RocketMQ Client 版本
-        mavenBom("org.springframework.cloud:spring-cloud-dependencies:${libs.versions.springCloud.get()}")
-        mavenBom("com.alibaba.cloud:spring-cloud-alibaba-dependencies:${libs.versions.springCloudAlibaba.get()}")
-    }
-}
-
-dependencies {
-    // 当前根模块是迁移期的业务服务验证骨架, 因此只启用 MVC 运行时
-    // Gateway 的 WebFlux 依赖已登记在版本目录中, 等 aspen-gateway 模块创建后单独引入
-    implementation(libs.spring.boot.starter.webmvc)
-    implementation(libs.spring.boot.starter.validation)
-    implementation(libs.spring.boot.starter.actuator)
-    implementation(libs.spring.boot.starter.aspectj)
-
-    // 安全基线: 业务进程负责验证可信身份并建立只读安全上下文
-    // Token 签发和完整认证流程仍归后续 aspen-auth-biz, 不在普通业务服务重复实现
-    implementation(libs.spring.boot.starter.security)
-    implementation(libs.spring.boot.starter.security.oauth2.resource.server)
-
-    // 服务注册, 配置, 同步调用和流量治理均由 Cloud/SCA BOM 管理版本
-    implementation(libs.spring.cloud.starter.openfeign)
-    implementation(libs.spring.cloud.starter.loadbalancer)
-    implementation(libs.spring.cloud.alibaba.nacos.discovery)
-    implementation(libs.spring.cloud.alibaba.nacos.config)
-    implementation(libs.spring.cloud.alibaba.sentinel)
-    implementation(libs.sentinel.datasource.nacos)
-
-    // Redis 只承担缓存, 幂等和短期状态, 不作为权威业务数据库
-    implementation(libs.spring.boot.starter.cache)
-    implementation(libs.spring.boot.starter.data.redis)
-
-    // RocketMQ 使用 Spring Cloud Alibaba 官方 Binder, 业务消息必须遵守事件版本和幂等规范
-    implementation(libs.spring.cloud.alibaba.stream.rocketmq)
-
-    // Jimmer 是项目唯一 ORM, KSP 在编译期生成类型安全的元模型和 DTO 实现
-    implementation(libs.jimmer.spring.boot.starter)
-    ksp(libs.jimmer.ksp)
-    runtimeOnly(libs.mysql.connector)
-
-    // Kotlin 反射和 Jackson Kotlin 模块用于 Spring 构造器绑定与 JSON 序列化
-    implementation(libs.kotlin.reflect)
-    implementation(libs.jackson.module.kotlin)
-
-    // Boot 4 将测试能力拆成更细的 Starter, 只引入当前 MVC 与安全测试需要的部分
-    testImplementation(libs.spring.boot.starter.webmvc.test)
-    testImplementation(libs.spring.boot.starter.security.test)
-    testImplementation(libs.kotlin.test.junit5)
-    testImplementation(libs.archunit.junit5)
-    testRuntimeOnly(libs.junit.platform.launcher)
-
-    // Quartz 只允许由未来的 aspen-task-biz 使用, 普通业务模块不得在此处引入
-    // Gateway, Quartz 和 API 契约依赖别名均已预置在 gradle/libs.versions.toml
-}
-
-kotlin {
-    compilerOptions {
-        // 严格处理 JSR-305 可空性, 并让无显式 use-site target 的注解同时作用于参数和属性
-        freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
-    }
-}
 
 // 任何运行模块都不能引入第二套 ORM, 分布式事务或 Dubbo RPC 栈
 val forbiddenDependencyGroups = setOf(
@@ -110,12 +32,28 @@ allprojects {
         dependencies.withType<ProjectDependency>().configureEach {
             val targetProjectPath = path
 
-            require(sourceProjectPath != AspenProjects.COMMON_CORE) {
+            // core 与 gateway-contract 是零项目依赖的协议基座, 不得依赖任何项目模块
+            require(
+                sourceProjectPath !in setOf(AspenProjects.COMMON_CORE, AspenProjects.COMMON_GATEWAY_CONTRACT),
+            ) {
                 "$sourceProjectPath 不能依赖项目模块 $targetProjectPath"
             }
-            if (sourceProjectPath in setOf(AspenProjects.COMMON_DATABASE, AspenProjects.COMMON_CACHE, AspenProjects.COMMON_GEN)) {
-                require(targetProjectPath == AspenProjects.COMMON_CORE) {
-                    "$sourceProjectPath 只能依赖 ${AspenProjects.COMMON_CORE}, 当前依赖为 $targetProjectPath"
+            // common 基础设施模块的项目依赖白名单: database/cache/gen/web 只认 core;
+            // gateway 只认 core/cache/gateway-contract, 不依赖 database (common-module-design §1)
+            val commonProjectDependencyWhitelist = mapOf(
+                AspenProjects.COMMON_DATABASE to setOf(AspenProjects.COMMON_CORE),
+                AspenProjects.COMMON_CACHE to setOf(AspenProjects.COMMON_CORE),
+                AspenProjects.COMMON_GEN to setOf(AspenProjects.COMMON_CORE),
+                AspenProjects.COMMON_WEB to setOf(AspenProjects.COMMON_CORE),
+                AspenProjects.COMMON_GATEWAY to setOf(
+                    AspenProjects.COMMON_CORE,
+                    AspenProjects.COMMON_CACHE,
+                    AspenProjects.COMMON_GATEWAY_CONTRACT,
+                ),
+            )
+            commonProjectDependencyWhitelist[sourceProjectPath]?.let { allowedProjectPaths ->
+                require(targetProjectPath in allowedProjectPaths) {
+                    "$sourceProjectPath 只能依赖 ${allowedProjectPaths.joinToString()}, 当前依赖为 $targetProjectPath"
                 }
             }
             require(
@@ -135,7 +73,12 @@ allprojects {
             val dependencyGroup = group.orEmpty()
             val dependencyName = name
 
-            if (sourceProjectPath == ":aspen-common-core") {
+            // core 与 gateway-contract 同为纯契约模块: 编译类路径禁止 Spring、Jimmer、
+            // Jackson 与 Redis, 保证可被 api 安全引用 (《技术架构》7.9 与 §8)
+            if (
+                sourceProjectPath == AspenProjects.COMMON_CORE ||
+                sourceProjectPath == AspenProjects.COMMON_GATEWAY_CONTRACT
+            ) {
                 require(
                     !dependencyGroup.startsWith("org.springframework") &&
                         !dependencyGroup.startsWith("org.babyfish.jimmer") &&
@@ -159,13 +102,10 @@ allprojects {
                 }
             }
             // Redis 客户端只能由 common-cache 声明并经其受控操作类暴露,
-            // 其余模块 (含 gateway 的运行时组合) 一律经 common-cache 访问 Redis;
-            // 根模块是路线图第 12 步待移除的迁移期骨架, 移除前暂时豁免
-            val isLegacyRootSkeleton = sourceProjectPath == ":"
+            // 其余模块 (含 gateway 的运行时组合) 一律经 common-cache 访问 Redis
             if (
                 dependencyName == "spring-boot-starter-data-redis" &&
-                sourceProjectPath != AspenProjects.COMMON_CACHE &&
-                !isLegacyRootSkeleton
+                sourceProjectPath != AspenProjects.COMMON_CACHE
             ) {
                 require(false) {
                     "$sourceProjectPath 不能直接依赖 spring-boot-starter-data-redis, 请改为依赖 ${AspenProjects.COMMON_CACHE}"
@@ -188,8 +128,4 @@ allprojects {
             }
         }
     }
-}
-
-tasks.withType<Test>().configureEach {
-    useJUnitPlatform()
 }

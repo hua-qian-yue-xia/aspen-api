@@ -6,6 +6,9 @@ import org.babyfish.jimmer.sql.Entity
 import org.babyfish.jimmer.sql.GeneratedValue
 import org.babyfish.jimmer.sql.GenerationType
 import org.babyfish.jimmer.sql.Id
+import org.babyfish.jimmer.sql.IdView
+import org.babyfish.jimmer.sql.JoinColumn
+import org.babyfish.jimmer.sql.ManyToOne
 import org.babyfish.jimmer.sql.Serialized
 import org.babyfish.jimmer.sql.Table
 import java.time.LocalDateTime
@@ -23,8 +26,14 @@ interface UpmAuthorizationChangeLogEntity : TenantScopedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val authorizationChangeLogId: Long
 
-    /** 执行变更的操作人主体标识; 系统自动变更时为服务身份字符串 */
-    val operatorUserId: String?
+    /** 执行变更的操作用户; 系统自动变更时为空; 引用列不设数据库外键, 保证日志不随用户删除而失效 */
+    @ManyToOne
+    @JoinColumn(name = "operator_user_id", referencedColumnName = "user_id")
+    val operatorUser: UpmUserEntity?
+
+    /** 操作用户主键; operatorUser 关联的标量视图, 按操作人过滤与统计时使用 */
+    @IdView("operatorUser")
+    val operatorUserId: Long?
 
     /** 变更主体类型, 约定取值为 user/role/menu/permission */
     val subjectType: String

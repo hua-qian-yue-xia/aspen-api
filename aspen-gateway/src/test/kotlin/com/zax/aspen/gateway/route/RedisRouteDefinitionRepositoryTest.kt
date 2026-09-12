@@ -5,7 +5,6 @@ import com.zax.aspen.common.gateway.contract.RouteDefinitionSnapshot
 import com.zax.aspen.common.gateway.consume.RouteSnapshotStore
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
-import org.springframework.test.util.ReflectionTestUtils
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
@@ -14,9 +13,7 @@ import kotlin.test.assertFailsWith
  */
 class RedisRouteDefinitionRepositoryTest {
     private val routeSnapshotStore: RouteSnapshotStore = Mockito.mock(RouteSnapshotStore::class.java)
-    private val repository = RedisRouteDefinitionRepository().apply {
-        ReflectionTestUtils.setField(this, "routeSnapshotStore", routeSnapshotStore)
-    }
+    private val repository = RedisRouteDefinitionRepository(routeSnapshotStore)
 
     @Test
     fun `maps snapshots to gateway definitions`() {
