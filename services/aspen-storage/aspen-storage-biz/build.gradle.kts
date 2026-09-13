@@ -28,6 +28,9 @@ dependencyManagement {
 dependencies {
     implementation(project(AspenProjects.STORAGE_API))
     implementation(project(AspenProjects.COMMON_DATABASE))
+    // 业务进程最小信任链: 校验网关注入的身份头并装配 TenantContextSupplier,
+    // 补齐租户隔离实体 (TenantScopedEntity) 的租户上下文来源
+    implementation(project(AspenProjects.COMMON_SECURITY))
 
     // 当前阶段只提供可编译, 可启动的最小 MVC 运行时, 不提前引入未使用的基础设施;
     // 文件存储本轮只有实体与迁移, 上传/秒传/续传的 Service 与 Controller 随下一轮补齐

@@ -28,6 +28,9 @@ dependencies {
     // 路由分发契约与消费 SDK 统一由 common-gateway 提供, 网关只保留 SCG 集成件, 禁止链接任何业务实现
     implementation(project(AspenProjects.COMMON_GATEWAY))
 
+    // 身份/租户头常量统一引用 core, 避免网关注入侧与业务侧头名漂移
+    implementation(project(AspenProjects.COMMON_CORE))
+
     // Redis 访问一律经 common-cache 受控操作类, 业务代码不直接依赖 Redis 客户端
     implementation(project(AspenProjects.COMMON_CACHE))
 

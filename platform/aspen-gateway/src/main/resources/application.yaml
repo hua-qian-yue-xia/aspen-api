@@ -1,3 +1,7 @@
+server:
+  # 网关是外部流量唯一入口, 本地直连端口取 7x00 段最前 (dev-deployment §4)
+  port: 7000
+
 spring:
   application:
     name: aspen-gateway
@@ -11,8 +15,22 @@ spring:
       # Lettuce 默认的 connect 10s / command 60s (技术架构 14.4)
       connect-timeout: 3s
       timeout: 5s
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Auth 的 JWKS 端点, 网关凭公钥验签; 生产经环境变量指向 Auth 内网地址
+          jwk-set-uri: ${ASPEN_AUTH_JWKS_URI:http://localhost:7500/internal/auth/jwks}
 
 aspen:
   routes:
     # 路由分发的 Redis 隔离段, 必须与 Admin 侧 aspen.routes.environment 保持一致
     environment: local
+  gateway:
+    security:
+      # enforce 全量校验; permit-all 仅供本地无 Auth 联调逃生, 生产禁用
+      mode: ${ASPEN_GATEWAY_SECURITY_MODE:enforce}
+    internal:
+      # 注入内部身份头时的网关信任凭据, 与业务侧 aspen.security.trust-token 一致;
+      # 未配置时不注入身份头, 业务侧 fail-closed
+      trust-token: ${ASPEN_GATEWAY_INTERNAL_SECRET:}
