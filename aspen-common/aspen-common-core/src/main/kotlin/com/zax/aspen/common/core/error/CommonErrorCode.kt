@@ -21,6 +21,12 @@ enum class CommonErrorCode(
     /** 请求的资源不存在 */
     RESOURCE_NOT_FOUND("COMMON.RESOURCE_NOT_FOUND", "请求的资源不存在"),
 
+    /** 未认证或凭据失效: 登录失败、令牌缺失/过期/被吊销的统一 401 语义, 不携带更多细节 */
+    UNAUTHORIZED("COMMON.UNAUTHORIZED", "未认证或凭据已失效"),
+
+    /** 已认证但无权限访问目标资源, 路由级与资源级越权的统一 403 语义 */
+    FORBIDDEN("COMMON.FORBIDDEN", "无权访问目标资源"),
+
     /** 当前资源状态不允许执行目标操作 */
     STATE_CONFLICT("COMMON.STATE_CONFLICT", "资源状态不允许执行当前操作"),
 

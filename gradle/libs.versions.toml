@@ -35,6 +35,9 @@ spring-webmvc = { module = "org.springframework:spring-webmvc" }
 # 密码摘要 (BCrypt) 单依赖: 只取 crypto, 不引入完整 Spring Security 过滤链; 版本由 Boot 平台约束
 spring-security-crypto = { module = "org.springframework.security:spring-security-crypto" }
 
+# JWT 签发与 JWKS (Nimbus) 单依赖: Auth 作为签发方只取 jose, 网关侧验签走 resource-server starter; 版本由 Boot 平台约束
+spring-security-oauth2-jose = { module = "org.springframework.security:spring-security-oauth2-jose" }
+
 # Spring Cloud: Gateway 只能用于独立网关模块, 业务服务使用 OpenFeign + LoadBalancer
 spring-cloud-starter-gateway = { module = "org.springframework.cloud:spring-cloud-starter-gateway-server-webflux" }
 spring-cloud-starter-openfeign = { module = "org.springframework.cloud:spring-cloud-starter-openfeign" }

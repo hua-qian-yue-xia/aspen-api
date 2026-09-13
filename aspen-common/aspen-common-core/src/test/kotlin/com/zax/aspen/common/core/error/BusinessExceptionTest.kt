@@ -29,6 +29,8 @@ class BusinessExceptionTest {
             CommonErrorCode.METHOD_NOT_ALLOWED to "请求方法不支持",
             CommonErrorCode.UNSUPPORTED_MEDIA_TYPE to "请求的媒体类型不支持",
             CommonErrorCode.RESOURCE_NOT_FOUND to "请求的资源不存在",
+            CommonErrorCode.UNAUTHORIZED to "未认证或凭据已失效",
+            CommonErrorCode.FORBIDDEN to "无权访问目标资源",
             CommonErrorCode.STATE_CONFLICT to "资源状态不允许执行当前操作",
             CommonErrorCode.DEPENDENCY_UNAVAILABLE to "依赖服务暂时不可用",
             CommonErrorCode.INTERNAL_ERROR to "服务内部错误",

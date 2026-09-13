@@ -19,6 +19,8 @@ class AspenErrorCodeStatusMapper {
         CommonErrorCode.METHOD_NOT_ALLOWED.code to HttpStatus.METHOD_NOT_ALLOWED,
         CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.code to HttpStatus.UNSUPPORTED_MEDIA_TYPE,
         CommonErrorCode.RESOURCE_NOT_FOUND.code to HttpStatus.NOT_FOUND,
+        CommonErrorCode.UNAUTHORIZED.code to HttpStatus.UNAUTHORIZED,
+        CommonErrorCode.FORBIDDEN.code to HttpStatus.FORBIDDEN,
         CommonErrorCode.STATE_CONFLICT.code to HttpStatus.CONFLICT,
         CommonErrorCode.DEPENDENCY_UNAVAILABLE.code to HttpStatus.SERVICE_UNAVAILABLE,
         CommonErrorCode.INTERNAL_ERROR.code to HttpStatus.INTERNAL_SERVER_ERROR,
