@@ -9,6 +9,8 @@ springDependencyManagement = "1.1.7"
 springCloud = "2025.1.0"
 springCloudAlibaba = "2025.1.0.0"
 jimmer = "0.11.7"
+# springdoc 3.x 是 Spring Boot 4 适配线 (Jackson 3 对齐), 版本不经 Boot BOM 管理因此显式锁定
+springdoc = "3.1.1"
 
 [libraries]
 # Spring Boot: 按模块职责选择 Starter, 不允许公共模块传递整套运行时
@@ -57,6 +59,9 @@ spring-web = { module = "org.springframework:spring-web" }
 jakarta-validation-api = { module = "jakarta.validation:jakarta.validation-api" }
 # common-web 的 Filter 编译期依赖, 运行期由使用方的 starter-webmvc (内嵌容器) 提供
 jakarta-servlet-api = { module = "jakarta.servlet:jakarta.servlet-api" }
+
+# 路由套件的 OpenAPI 文档定制与运行时文档端点, common-web 引入后全部 biz 获得文档能力
+springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 
 # Jimmer 不在 Spring BOM 管理范围内, 因此显式锁定 Starter, SQL Kotlin 与 KSP 的相同版本
 jimmer-spring-boot-starter = { module = "org.babyfish.jimmer:jimmer-spring-boot-starter", version.ref = "jimmer" }

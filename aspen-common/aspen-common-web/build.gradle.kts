@@ -22,6 +22,14 @@ dependencies {
     // core 零基础设施依赖, 因此本模块仍可被任意 MVC 服务安全引用
     implementation(project(AspenProjects.COMMON_CORE))
 
+    // 路由套件注解定义 (GetRoute/PostRoute/RateLimitSpec/OperationTag), 消费端在本模块装配;
+    // route 零项目依赖、仅 spring-web 注解 API, 不引入额外传递
+    implementation(project(AspenProjects.COMMON_ROUTE))
+
+    // 限流与操作日志的主体解析读取 security 的请求级身份上下文; compileOnly 不传递,
+    // 运行期无 security 的服务 (如 task-biz) 经条件装配自动回退 XFF/IP 主体 (§8.3)
+    compileOnly(project(AspenProjects.COMMON_SECURITY))
+
     // WebMvcConfigurer/PathMatchConfigurer 与 AntPathMatcher 只作为装配内部实现,
     // 不经 api 传递 spring-webmvc; 使用方自带 starter-webmvc, WebFlux-only 服务
     // 因类路径缺 WebMvcConfigurer 被 @ConditionalOnClass 静默退避
@@ -34,6 +42,9 @@ dependencies {
     implementation(libs.jakarta.validation.api)
     // MDC 日志关联与异常处理器日志
     implementation(libs.slf4j.api)
+    // 路由套件的 OpenAPI 文档定制与运行时文档端点 (/v3/api-docs, swagger-ui);
+    // implementation 随运行期变体传递给全部 biz, 生产可经 springdoc.* 配置关闭
+    implementation(libs.springdoc.openapi.starter.webmvc.ui)
 
     testImplementation(libs.spring.boot.starter.webmvc.test)
     // 触发真实的 @Valid 校验异常路径 (MethodArgumentNotValidException)

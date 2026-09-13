@@ -31,6 +31,7 @@ class BusinessExceptionTest {
             CommonErrorCode.RESOURCE_NOT_FOUND to "请求的资源不存在",
             CommonErrorCode.UNAUTHORIZED to "未认证或凭据已失效",
             CommonErrorCode.FORBIDDEN to "无权访问目标资源",
+            CommonErrorCode.TOO_MANY_REQUESTS to "请求过于频繁",
             CommonErrorCode.STATE_CONFLICT to "资源状态不允许执行当前操作",
             CommonErrorCode.DEPENDENCY_UNAVAILABLE to "依赖服务暂时不可用",
             CommonErrorCode.INTERNAL_ERROR to "服务内部错误",

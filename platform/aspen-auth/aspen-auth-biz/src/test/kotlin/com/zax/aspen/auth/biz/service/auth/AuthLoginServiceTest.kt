@@ -332,14 +332,14 @@ class AuthLoginServiceTest {
     private fun sameSession(session: AuthSessionEntity): AuthSessionEntity =
         ArgumentMatchers.same(session) ?: session
 
+    /** anySession 的回退替身; 字段初始化期创建, 避免验证表达式内创建 mock 污染 matcher 栈 */
+    private val anySessionFallback: AuthSessionEntity = Mockito.mock(AuthSessionEntity::class.java)
+
     /**
-     * any matcher 的非空会话包装; 回退替身在字段初始化期创建, 避免验证表达式内
-     * 创建 mock 污染 matcher 栈
+     * any matcher 的非空会话包装
      *
      * @return matcher 登记结果, matcher 返回 null 时回退为预建替身
      */
-    private val anySessionFallback: AuthSessionEntity = Mockito.mock(AuthSessionEntity::class.java)
-
     private fun anySession(): AuthSessionEntity =
         ArgumentMatchers.any(AuthSessionEntity::class.java) ?: anySessionFallback
 

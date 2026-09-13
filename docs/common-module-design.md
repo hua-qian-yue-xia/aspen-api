@@ -1,6 +1,6 @@
 # Aspen Common 基础模块设计
 
-> 文档状态：core/gen/database/cache/gateway/web 首版已实现；security（业务进程最小信任链）随统一认证批次落地  
+> 文档状态：core/gen/database/cache/gateway/web/security 首版已实现；route（路由套件注解契约）随路由套件批次落地  
 > 文档基线：2026-09-13  
 > 关联文档：[技术架构](./technical-architecture.md)｜[认证数据模型](./auth-data-model.md)
 
@@ -16,6 +16,7 @@ aspen-common/
 ├── aspen-common-cache/
 ├── aspen-common-gateway-contract/
 ├── aspen-common-gateway/
+├── aspen-common-route/
 ├── aspen-common-web/
 └── aspen-common-security/
 ```
@@ -28,11 +29,13 @@ aspen-common-cache    -> aspen-common-core
 aspen-common-gen      -> aspen-common-core
 aspen-common-gateway-contract -> (零项目依赖)
 aspen-common-gateway  -> aspen-common-cache, aspen-common-gateway-contract
-aspen-common-web      -> aspen-common-core
+aspen-common-route    -> (零项目依赖, 编译类路径仅 Spring Web 注解 API)
+aspen-common-web      -> aspen-common-core, aspen-common-route,
+                         aspen-common-security (编译期可选, 限流主体读取)
 aspen-common-security -> aspen-common-core, aspen-common-database
 ```
 
-`core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；`gateway-contract` 与 `core` 同级，同样零基础设施依赖，因此可被 `api` 安全引用；`gateway` 只依赖 `cache` 取 Redis 分发原语并依赖 `gateway-contract` 承载纯契约，不依赖 `database`；`web` 承载 MVC 运行约定（受众路径前缀、错误契约、Trace ID），只依赖 `core` 的错误契约类型；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。
+`core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；`gateway-contract` 与 `core` 同级，同样零基础设施依赖，因此可被 `api` 安全引用；`route` 是同等定位的纯注解契约模块，只依赖 Spring Web 注解 API，供 `api` 契约接口声明端点（§8.3）；`gateway` 只依赖 `cache` 取 Redis 分发原语并依赖 `gateway-contract` 承载纯契约，不依赖 `database`；`web` 承载 MVC 运行约定（受众路径前缀、错误契约、Trace ID）与路由套件消费端（限流拦截器、操作日志拦截器、springdoc 定制），依赖 `core` 的错误契约类型、`route` 的注解定义，并以编译期可选方式引用 `security` 的身份上下文（运行期无 `security` 的服务自动回退，见 §8.3）；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。
 
 源码注释遵守项目统一规范：注释正文使用中文，专有名称保留原文，标点使用英文字符，句尾不加句号。类、接口、枚举、对象、字段和方法必须有说明职责或约束的有效 KDoc，重要实现边界补充行注释。方法 KDoc 必须采用完整块格式（概述段 + 空行 + 每个参数的 `@param` + 非 `Unit` 返回的 `@return`），禁止只有单行概述的方法注释；该规则由根模块 KDoc 纪律测试强制。数据库实体和字段的 KDoc 必须详尽：类级注释说明职责与典型使用场景，字段有具体使用场景、取值约定、生命周期或对其他流程的影响时必须逐一写清楚，仅列名自解释且无附加语义的简单字段可不写字段注释。Jimmer 实体列名与属性名蛇形一致时不声明 `@Column`，由 Jimmer 自动解析，该规则由架构测试强制检查。完整规则和示例见《技术架构》7.8 节。
 
@@ -279,7 +282,7 @@ aspen:
 
 ## 8. Web
 
-包根为 `com.zax.aspen.common.web`。公共 Web 运行约定模块，首版提供受众路径前缀、统一错误契约与 Trace ID：
+包根为 `com.zax.aspen.common.web`。公共 Web 运行约定模块，首版提供受众路径前缀、统一错误契约与 Trace ID，并承载路由套件（§8.3）的全部消费端：限流拦截器、操作日志拦截器与 springdoc 定制。
 
 - `AspenWebProperties`：`aspen.web` 配置绑定，声明管理端、用户端与设备端三组「前缀 + Controller 包匹配规则」，默认值即平台约定，部署可整体改写前缀而不改代码；前缀格式错误或三组受众前缀/包规则重复时启动失败。
 - `AspenWebAutoConfiguration`：实现 `WebMvcConfigurer`，在路径映射注册期按 Controller 类的包名给 `@RestController` 统一追加受众前缀；匹配对象是包名（Ant 规则、点号分隔），不是 URL。
@@ -330,7 +333,7 @@ aspen:
 
 - `title` 取 `ErrorCode.defaultMessage`，`detail` 取 `BusinessException.detail`（必须可安全返回给调用方，敏感诊断只进日志或 `cause`）；`code` 与 `traceId` 是扩展字段，前者是稳定机器错误码，后者用于排查。
 - `type` 在错误文档站真实存在前保持默认 `about:blank`，机器判别一律以 `code` 为准；不凭空发明会漂移的 URI。
-- 状态映射：`INVALID_ARGUMENT`→400、`METHOD_NOT_ALLOWED`→405、`UNSUPPORTED_MEDIA_TYPE`→415、`RESOURCE_NOT_FOUND`→404、`STATE_CONFLICT`→409、`DEPENDENCY_UNAVAILABLE`→503、`INTERNAL_ERROR`→500；未登记的业务错误码默认 400，需要精确状态码时在映射表登记。
+- 状态映射：`INVALID_ARGUMENT`→400、`METHOD_NOT_ALLOWED`→405、`UNSUPPORTED_MEDIA_TYPE`→415、`RESOURCE_NOT_FOUND`→404、`UNAUTHORIZED`→401、`FORBIDDEN`→403、`STATE_CONFLICT`→409、`TOO_MANY_REQUESTS`→429（路由套件限流超限，§8.3）、`DEPENDENCY_UNAVAILABLE`→503、`INTERNAL_ERROR`→500；未登记的业务错误码默认 400，需要精确状态码时在映射表登记。
 - 参数校验失败（`@Valid` 请求体、方法级校验、服务层 `@Validated` 的 `ConstraintViolationException`）、不可读请求体、缺少必填请求参数、参数类型不匹配统一映射为 400 `COMMON.INVALID_ARGUMENT`；HTTP 方法不支持映射 405 `COMMON.METHOD_NOT_ALLOWED`（detail 指明被拒绝的方法）、请求媒体类型不支持映射 415 `COMMON.UNSUPPORTED_MEDIA_TYPE`（detail 回显客户端发送的 Content-Type）；未匹配路由统一 404 `COMMON.RESOURCE_NOT_FOUND`；兜底异常统一 500 `COMMON.INTERNAL_ERROR` 且 `detail` 只给安全消息，原始异常与堆栈只随 traceId 写日志。协议级客户端错误必须精确渲染为对应 4xx，不得落入兜底 500。
 
 ### 8.2 Trace ID
@@ -341,6 +344,42 @@ aspen:
 - 过滤器按同步请求模型设计：`OncePerRequestFilter` 默认跳过异步再分发，引入 `Callable`/`DeferredResult` 等异步 Controller 前，完成线程与再分发阶段的 MDC 将无 traceId，届时须覆写 `shouldNotFilterAsyncDispatch` 或另行改造。
 
 首版不提供 `R<T>` 包装、参数校验增强或 Trace 传播（W3C traceparent/Micrometer Tracing）；Problem Details 的 `type` 指向错误文档站、以及 Trace 上下文跨服务延续，在对应基础设施建立后再纳入本模块。
+
+### 8.3 路由套件（aspen-common-route）
+
+`aspen-common-route` 是薄注解契约模块：零项目依赖、编译类路径仅 Spring Web 注解 API、无任何 Bean 与自动装配。`api` 契约接口用它声明端点，替代裸 `@GetMapping`/`@PostMapping` 等 verb 注解；`path` 只写受众后的模块相对路径（与 §8 配套约定一致），受众前缀仍由 Controller 包位置决定。设计迁移自 pjcloud/NestJS 的 `@router.post` 装饰器，按网关分体架构做了三处裁剪：
+
+- 不引入 `resType`/wrapper：返回值结构由 springdoc 从方法签名的强类型直接推断（如 `PageResult<TaskVO>`），且与「成功直返 DTO/VO、失败 Problem Details」的错误契约互斥方向不兼容。
+- 不引入免鉴权 tag：鉴权权威在网关（`GatewaySecurityConfig` 公开路径），biz 侧注解无法也不得驱动网关放行。
+- 每个注解属性必须有真实消费者，由 `RouteSuiteBoundaryTest` 架构测试强制；声明面不得先于消费面膨胀（NestJS 版 `rateLimit.key`/`limitType`、`RepeatSubmit` 均为无消费者的死配置，引以为鉴）。
+
+五个 verb 注解（`GetRoute`/`PostRoute`/`PutRoute`/`DeleteRoute`/`PatchRoute`）元标注 `@RequestMapping(method=...)`，属性完全一致：
+
+| 属性 | 类型 | 默认 | 消费者 |
+| --- | --- | --- | --- |
+| `path` | `vararg String` | 必填（经 `@AliasFor` 转发给 `RequestMapping.path`） | Spring MVC 映射注册 |
+| `summary` | `String` | 必填 | springdoc 定制 + 操作日志 |
+| `description` | `String` | 空串 | springdoc 定制 |
+| `rateLimit` | `RateLimitSpec` | 60 秒 / 100 次 / `USER` | 限流拦截器 |
+| `log` | `OperationTag` | `OTHER` | 操作日志拦截器 |
+
+`RateLimitSpec` 携带 `windowSeconds`/`limit`/`scope`；`RateLimitScope.USER` 按认证主体限量，`GLOBAL` 全主体共享单桶。`OperationTag` 取值 `OTHER`/`INSERT`/`UPDATE`/`DELETE`/`GRANT`/`EXPORT`/`IMPORT`/`GENERATE`/`ADMIN`/`LOGIN`，是操作日志的业务分类标签。
+
+消费端全部在 `aspen-common-web` 自动装配，业务服务零配置：
+
+- `route/RouteSpecResolver`：`HandlerMethod` → 路由声明解析，兼容注解在 api 契约接口方法上（实现 Controller 零注解），解析结果按 `HandlerMethod` 缓存，请求期零反射合并开销。
+- `route/RateLimitInterceptor` + `route/FixedWindowRateLimiter`：进程内固定窗口计数（纳秒级、无外部 IO），key 为「映射 pattern + HTTP 方法 + scope 主体」；超限抛 `BusinessException(CommonErrorCode.TOO_MANY_REQUESTS)`，经统一错误契约渲染 429 `application/problem+json`。`USER` 主体优先取 `RequestIdentityContext`（`security` 在类路径且装配时），无身份上下文时回退 `X-Forwarded-For` 首跳，再回退匿名共享桶；因此未接入 `common-security` 的服务（如 task-biz）自动退化为 IP 维度。`FixedWindowRateLimiter` 接受注入 `Clock`，过期窗口桶按容量阈值惰性清扫。
+- `route/OperationLogInterceptor`：以独立 logger 名 `aspen.operation` 输出 INFO 单行结构化日志（tag、summary、method、pattern、status、costMs、subject、traceId、异常摘要），运维可按 logger 名独立路由到访问日志采集；请求/响应体捕获与落库属二期。
+- `route/RouteOperationCustomizer`：springdoc `GlobalOperationCustomizer`，把 `summary`/`description` 写入 OpenAPI `Operation`。`common-web` 因此引入 `springdoc-openapi-starter-webmvc-ui` 3.x（Spring Boot 4 适配线），全部 biz 随依赖获得 `/v3/api-docs` 与 swagger-ui；网关不路由这些路径，仅内网可达，生产可经 `springdoc.api-docs.enabled`/`springdoc.swagger-ui.enabled` 关闭。
+
+语义与限制：
+
+- 本地固定窗口是「每实例配额」：N 实例部署时限流总量约 N×limit，需要全局限量时二期换 Redis 实现（经 common-cache 受控通道），注解与业务代码不变。
+- 固定窗口存在边界毛刺（窗口沿处两个窗口内可突发 2×limit），属该算法的已知语义，不做滑动窗口。
+- `X-Forwarded-For` 仅网关链路可信，直连服务端口的调用方伪造 XFF 可稀释限流桶；绕过网关直连本属部署违规，由内网边界与信任链兜底。
+- 限流与操作日志拦截器只对携带路由注解的端点生效；未注解端点走原生 MVC 路径，默认零额外开销。
+
+二期再落地项：Redis 分布式限流实现替换、防重复提交（in-flight 锁 + 短窗去重，money 类端点 opt-in）、路由注解声明公开路径与网关白名单的一致性 fail-fast 校验、操作日志落库（sys_log）与请求体脱敏捕获。
 
 ## 9. Security
 
@@ -360,7 +399,7 @@ aspen:
 - core 禁止依赖其他项目模块、Spring、Jackson、Jimmer 或 Redis。
 - database/cache/gen 只能依赖 core, 三者不互相依赖。
 - gateway 只能依赖 cache 与 gateway-contract, 不依赖 database; gateway-contract 与 core 同级, 零项目依赖。
-- web 只依赖 core (错误契约类型), 不依赖 database/cache/gateway。
+- route 与 gateway-contract 同级, 零项目依赖; web 只能依赖 core (错误契约)、route (路由注解) 与 security (编译期可选, 限流主体读取), 不依赖 database/cache/gateway。
 - 所有 common 模块禁止依赖 `services` 目录下的模块。
 - API 模块禁止依赖 database/cache、Jimmer、Spring Data、Redis 或 Spring Boot Starter; 路由契约例外只经纯契约模块 gateway-contract 进入。
 - 所有模块禁止 JPA/Hibernate、MyBatis/MyBatis-Plus、Seata 和 Dubbo，并禁止动态或变化版本。
@@ -373,8 +412,9 @@ Testcontainers 的 JUnit Jupiter 和 MySQL 依赖别名已经登记在版本目�
 2. common 不依赖任何 service，database/cache 不互相依赖，gateway 不依赖 database，gateway-contract 编译类路径不包含 Spring、Jackson 或 Redis。
 3. 公共 Jimmer 映射接口能够被测试 Entity 组合继承并通过 KSP，Jimmer 元数据能识别乐观锁和逻辑删除。
 4. 非法分页、批次、Cache、TTL、Key、业务组白名单、大小和 Web 受众前缀配置启动失败。
-5. 用户提供的 Clock、数据库限制、审计拦截器、CacheManager、RedisTemplate、CacheOperations、Trace ID 过滤器、错误码状态映射器或统一异常渲染器可以覆盖默认 Bean。
+5. 用户提供的 Clock、数据库限制、审计拦截器、CacheManager、RedisTemplate、CacheOperations、Trace ID 过滤器、错误码状态映射器、统一异常渲染器或路由套件 Bean（解析器、限流器、拦截器、springdoc 定制）可以覆盖默认 Bean。
 6. 未声明 Cache 默认不可创建，Redis 故障不会被公共层吞掉。
 7. 完整 Gradle `check` 与 Admin 启动测试通过。
 8. `controller/admin`、`controller/app` 与 `controller/device` 包下的 `@RestController` 映射分别携带 `/admin-api`、`/app-api`、`/device-api` 前缀，`internal` 及其余包不加前缀；前缀可经 `aspen.web.*` 配置整体覆盖。
 9. 失败响应统一 `application/problem+json`，携带 `code`（机器错误码）与 `traceId`，HTTP 状态与错误码映射一致，兜底异常不泄露内部细节；成功响应直接返回 DTO/VO 且带 `X-Trace-Id` 响应头，body 内 `traceId` 与响应头一致。
+10. 路由套件：verb 组合注解在 api 契约接口方法上可被 MVC 解析为映射（实现 Controller 零注解）；限流超限第 `limit+1` 次请求返回 429 `application/problem+json`（`COMMON.TOO_MANY_REQUESTS`）；`aspen.operation` logger 输出操作日志行；springdoc 文档的 summary 与注解一致；`aspen-common-route` 源码 import 只允许 `org.springframework.web.bind.annotation`，且注解每个属性在 common-web 存在消费者（架构测试强制）。

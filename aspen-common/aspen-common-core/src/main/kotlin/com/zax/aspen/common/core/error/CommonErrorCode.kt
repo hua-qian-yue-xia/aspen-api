@@ -27,6 +27,9 @@ enum class CommonErrorCode(
     /** 已认证但无权限访问目标资源, 路由级与资源级越权的统一 403 语义 */
     FORBIDDEN("COMMON.FORBIDDEN", "无权访问目标资源"),
 
+    /** 请求频率超出端点限流配额, 路由套件限流拦截器的统一 429 语义 */
+    TOO_MANY_REQUESTS("COMMON.TOO_MANY_REQUESTS", "请求过于频繁"),
+
     /** 当前资源状态不允许执行目标操作 */
     STATE_CONFLICT("COMMON.STATE_CONFLICT", "资源状态不允许执行当前操作"),
 

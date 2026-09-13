@@ -1,6 +1,8 @@
 package com.zax.aspen.task.api.contract
 
 import com.zax.aspen.common.core.page.PageResult
+import com.zax.aspen.common.route.OperationTag
+import com.zax.aspen.common.route.PostRoute
 import com.zax.aspen.task.api.dto.TaskExecutionPageQuery
 import com.zax.aspen.task.api.dto.TaskPageQuery
 import com.zax.aspen.task.api.dto.TaskSaveDTO
@@ -34,7 +36,7 @@ interface TaskApi {
      * @param command 任务新增入参, taskCode 全局唯一且永久占用
      * @return 已落库的任务视图, 含生成的 id 与版本号
      */
-    @PostMapping(PATH)
+    @PostRoute(PATH, summary = "新增任务", log = OperationTag.INSERT)
     fun createTask(
         @RequestBody @Valid command: TaskSaveDTO,
     ): TaskVO

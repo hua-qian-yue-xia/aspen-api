@@ -1,7 +1,7 @@
 # Aspen 项目技术架构
 
-> 文档状态：目标架构已确认，待按实施阶段落地；`aspen-common-web` 受众路径前缀已实现（见 7.5 与 [Common 模块设计](./common-module-design.md) §8）  
-> 文档基线：2026-09-12  
+> 文档状态：目标架构已确认，待按实施阶段落地；`aspen-common-web` 受众路径前缀与 `aspen-common-route` 路由套件已实现（见 7.5、7.9 与 [Common 模块设计](./common-module-design.md) §8）  
+> 文档基线：2026-09-13  
 > 扫描范围：`build.gradle.kts`、`settings.gradle.kts`、Gradle Wrapper、`src/main` 与 `src/test`  
 > 部署约束：自有机房、Docker，不使用 Kubernetes，不依赖第三方云厂商  
 > 规模目标：100 万注册用户、50 万日活跃用户  
@@ -202,7 +202,8 @@ aspen/
 │   ├── aspen-common-cache/              # Redis Key、TTL、受控序列化和缓存配置
 │   ├── aspen-common-gateway-contract/   # 网关路由分发纯契约：信封、结构类型与介质 Key 约定，零基础设施依赖
 │   ├── aspen-common-gateway/            # 网关路由分发发布原语、消费 SDK 与自动装配
-│   ├── aspen-common-web/                # MVC 运行约定（受众路径前缀）、校验、异常响应、Trace ID
+│   ├── aspen-common-route/              # 路由套件纯注解契约：verb 组合注解与限流/操作日志声明，零项目依赖
+│   ├── aspen-common-web/                # MVC 运行约定（受众路径前缀）、错误响应、Trace ID 与路由套件消费端
 │   ├── aspen-common-security/           # 身份验签、只读上下文与管理端点保护
 │   ├── aspen-common-feign/              # Feign 拦截器、超时和错误解码
 │   ├── aspen-common-sentinel/           # 资源命名、规则与降级契约
@@ -530,6 +531,7 @@ val createdAt: LocalDateTime
 - Spring Cloud OpenFeign 的契约注解 API。
 - `aspen-common-core` 中稳定、无基础设施依赖的协议基础类型。
 - 独立纯契约模块 `aspen-common-gateway-contract`（路由分发的信封、结构类型与 Redis Key 约定）；该模块零项目依赖、零基础设施依赖，`api` 不得引入承载发布/消费原语与自动装配的 `aspen-common-gateway`。
+- 路由套件纯注解模块 `aspen-common-route`（五个 verb 组合注解与限流/操作日志声明，仅依赖 Spring Web 注解 API）；消费端全部在 `aspen-common-web` 自动装配（见《Common 模块设计》§8.3），`api` 契约接口引用它声明端点。
 
 `api` 禁止引入 Spring Boot Starter、Jimmer、数据库驱动、Redis、RocketMQ Client、Nacos Client、Sentinel Runtime、日志实现和任何 `biz`。即使某个类型当前使用方便，也不能通过 `api` 把完整运行时 Starter 传递给所有消费方。
 

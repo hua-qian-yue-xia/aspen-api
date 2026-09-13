@@ -22,6 +22,10 @@ dependencies {
     // 不引入任何运行时基础设施
     api(project(AspenProjects.COMMON_CORE))
 
+    // 路由套件注解出现在契约接口方法签名上 (如 @PostRoute), 属对外契约的一部分;
+    // route 零项目依赖、仅 spring-web 注解 API, 与 core 同级安全
+    api(project(AspenProjects.COMMON_ROUTE))
+
     // 仅保留 DTO, VO, HTTP 契约和校验所需 API; 管理侧 Feign Client (client/) 与执行结果
     // 事件 (event/) 是 Feign/消息通道时代的预留契约目录, HTTP 投递 v1 不建
     api(libs.spring.web)

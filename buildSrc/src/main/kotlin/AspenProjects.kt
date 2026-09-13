@@ -20,6 +20,8 @@ object AspenProjects {
 
     const val COMMON_GATEWAY = ":aspen-common-gateway"
 
+    const val COMMON_ROUTE = ":aspen-common-route"
+
     const val COMMON_GEN = ":aspen-common-gen"
 
     const val COMMON_WEB = ":aspen-common-web"

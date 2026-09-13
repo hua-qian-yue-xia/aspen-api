@@ -37,21 +37,33 @@ allprojects {
         dependencies.withType<ProjectDependency>().configureEach {
             val targetProjectPath = path
 
-            // core 与 gateway-contract 是零项目依赖的协议基座, 不得依赖任何项目模块
+            // core 与 gateway-contract 是零项目依赖的协议基座, 不得依赖任何项目模块;
+            // route 是路由套件纯注解契约, 同为零项目依赖, 只依赖 spring-web 注解 API
             require(
-                sourceProjectPath !in setOf(AspenProjects.COMMON_CORE, AspenProjects.COMMON_GATEWAY_CONTRACT),
+                sourceProjectPath !in setOf(
+                    AspenProjects.COMMON_CORE,
+                    AspenProjects.COMMON_GATEWAY_CONTRACT,
+                    AspenProjects.COMMON_ROUTE,
+                ),
             ) {
                 "$sourceProjectPath 不能依赖项目模块 $targetProjectPath"
             }
-            // common 基础设施模块的项目依赖白名单: database/cache/gen/web 只认 core;
+            // common 基础设施模块的项目依赖白名单: database/cache/gen 只认 core;
             // gateway 只认 core/cache/gateway-contract, 不依赖 database (common-module-design §1);
             // security 承载业务进程最小信任链, 依赖 core (头常量) 与 database (TenantContextSupplier),
-            // 无 Redis 依赖 (快照分发 SDK 已随端配置回归 Auth 本库直读移除)
+            // 无 Redis 依赖 (快照分发 SDK 已随端配置回归 Auth 本库直读移除);
+            // web 依赖 core (错误契约) 与 route (路由注解消费), security 为编译期可选
+            // (限流主体读取, 运行期无该模块的服务回退 XFF/IP, common-module-design §8.3)
             val commonProjectDependencyWhitelist = mapOf(
                 AspenProjects.COMMON_DATABASE to setOf(AspenProjects.COMMON_CORE),
                 AspenProjects.COMMON_CACHE to setOf(AspenProjects.COMMON_CORE),
                 AspenProjects.COMMON_GEN to setOf(AspenProjects.COMMON_CORE),
-                AspenProjects.COMMON_WEB to setOf(AspenProjects.COMMON_CORE),
+                AspenProjects.COMMON_ROUTE to emptySet(),
+                AspenProjects.COMMON_WEB to setOf(
+                    AspenProjects.COMMON_CORE,
+                    AspenProjects.COMMON_ROUTE,
+                    AspenProjects.COMMON_SECURITY,
+                ),
                 AspenProjects.COMMON_GATEWAY to setOf(
                     AspenProjects.COMMON_CORE,
                     AspenProjects.COMMON_CACHE,

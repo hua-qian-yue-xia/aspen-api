@@ -129,6 +129,7 @@ include(
     ":aspen-common-cache",
     ":aspen-common-gateway-contract",
     ":aspen-common-gateway",
+    ":aspen-common-route",
     ":aspen-common-web",
     ":aspen-common-security",
     ":aspen-admin-api",
@@ -148,6 +149,7 @@ project(":aspen-common-database").projectDir = file("aspen-common/aspen-common-d
 project(":aspen-common-cache").projectDir = file("aspen-common/aspen-common-cache")
 project(":aspen-common-gateway-contract").projectDir = file("aspen-common/aspen-common-gateway-contract")
 project(":aspen-common-gateway").projectDir = file("aspen-common/aspen-common-gateway")
+project(":aspen-common-route").projectDir = file("aspen-common/aspen-common-route")
 project(":aspen-common-web").projectDir = file("aspen-common/aspen-common-web")
 project(":aspen-common-security").projectDir = file("aspen-common/aspen-common-security")
 project(":aspen-admin-api").projectDir = file("services/aspen-admin/aspen-admin-api")
