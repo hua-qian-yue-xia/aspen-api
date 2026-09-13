@@ -1,6 +1,6 @@
 # Aspen Common 基础模块设计
 
-> 文档状态：core/gen/database/cache/gateway/web 首版已实现；security（认证客户端配置快照分发 + 业务进程最小信任链）随统一认证批次落地  
+> 文档状态：core/gen/database/cache/gateway/web 首版已实现；security（业务进程最小信任链）随统一认证批次落地  
 > 文档基线：2026-09-13  
 > 关联文档：[技术架构](./technical-architecture.md)｜[认证数据模型](./auth-data-model.md)
 
@@ -29,7 +29,7 @@ aspen-common-gen      -> aspen-common-core
 aspen-common-gateway-contract -> (零项目依赖)
 aspen-common-gateway  -> aspen-common-cache, aspen-common-gateway-contract
 aspen-common-web      -> aspen-common-core
-aspen-common-security -> aspen-common-core, aspen-common-database, aspen-common-cache
+aspen-common-security -> aspen-common-core, aspen-common-database
 ```
 
 `core` 不依赖 Spring、Web、Jackson、Jimmer 或 Redis；`database` 与 `cache` 不互相依赖；`gateway-contract` 与 `core` 同级，同样零基础设施依赖，因此可被 `api` 安全引用；`gateway` 只依赖 `cache` 取 Redis 分发原语并依赖 `gateway-contract` 承载纯契约，不依赖 `database`；`web` 承载 MVC 运行约定（受众路径前缀、错误契约、Trace ID），只依赖 `core` 的错误契约类型；所有 common 模块禁止依赖任何服务的 `api` 或 `biz`。不存在 `common-all`，没有数据库或缓存需求的服务不引入对应模块。
@@ -231,7 +231,7 @@ val cached = cacheOperations.get<UserView>("upm-user", key)
 
 使用边界：
 
-- 只用于「缓存语义不适用」的场景：权威数据在数据库、Redis 只是可随时全量重建的分发介质，或单调计数与轻量变更通知；每个使用场景必须在本节登记，已登记场景为网关路由快照分发（Admin 发布、Gateway 只读消费，Key 与频道由 `aspen-common-gateway-contract` 的 `GatewayRouteContract` 定义）与认证客户端配置快照分发（Admin 发布、Auth 只读消费，Key 与频道由 `aspen-common-security` 的 `AuthClientContract` 定义）。
+- 只用于「缓存语义不适用」的场景：权威数据在数据库、Redis 只是可随时全量重建的分发介质，或单调计数与轻量变更通知；每个使用场景必须在本节登记，当前已登记场景为网关路由快照分发（Admin 发布、Gateway 只读消费，Key 与频道由 `aspen-common-gateway-contract` 的 `GatewayRouteContract` 定义）。曾有第二个登记场景「认证客户端配置快照分发」，2026-09-13 随端配置两表迁入 Auth Schema 本库直读而整体退役（消费者只有 Auth 自身，跨库分发无必要）。
 - 版本化快照的发布一律使用 `setValueIfNewer`，禁止用 `increment` + `setValue` 手工拼装发布序列——两步之间无原子性，并发发布时旧信封可能在新信封之后落盘，污染后续冷启动加载。
 - Key 不经过 `CacheKeyBuilder` 命名空间（跨服务共享键含 service 段无法对齐），由使用方契约常量统一定义并自行校验格式；缓存语义的数据仍必须走 `AspenCacheOperations`，禁止用本原语绕过 TTL 治理。
 - `subscribe` 不提供可靠投递、重放或死信，断线期间的变更由使用方定义的自愈路径兜底（路由场景为下次变更或重启重发布）；可靠业务事件继续使用 RocketMQ。
@@ -344,21 +344,12 @@ aspen:
 
 ## 9. Security
 
-包根为 `com.zax.aspen.common.security`。本模块承载两件事：认证客户端配置的分发 SDK，与业务进程的最小信任链。表结构与分发语义权威见《认证数据模型》。
-
-**客户端配置快照分发**（与路由分发同构，权威源在 Admin SYS 两表，Auth 只读消费）：
-
-- `contract/AuthClientContract`：信封 Key、版本计数器 Key 与通知频道的模板常量与 environment 格式校验；仅 auth 与 admin 的 `biz` 消费本 SDK，无 `api` 引用需求，因此不拆纯契约模块。
-- `publish/ClientConfigPublisher`：取号 → 组装信封（端 + 方式行）→ `setValueIfNewer` 守卫落盘 → 通知；Admin 侧在事务提交后与启动时调用。
-- `consume/ClientConfigSnapshotStore`：两段式解析的内存快照（信封级损坏保留旧快照、单条损坏跳过），供认证引擎查询端与方式策略，运行期零 Redis 访问。
-- `AspenSecurityAutoConfiguration`：对齐 common-cache/gateway 的装配模式，仅当容器真实产出 `AspenRedisOperations` 时注册分发部分。
-
-**业务进程最小信任链**（防网关绕过与伪造身份头）：
+包根为 `com.zax.aspen.common.security`。本模块承载业务进程的最小信任链（防网关绕过与伪造身份头），只依赖 Servlet 能力与 common-database 的租户契约，无 Redis 依赖。曾承载的认证客户端配置快照分发 SDK 已随端配置两表迁入 Auth Schema（2026-09-13 归属修订）整体退役，权威说明见《认证数据模型》第 7 节。
 
 - `trust/InternalTrustFilter`：校验 Gateway 注入的信任头（值来自环境变量 `ASPEN_GATEWAY_INTERNAL_SECRET`，两侧一致才放行）；缺失或不符时拒绝携带内部身份头的请求，未携带身份头的请求按匿名处理（internal 端点的保护由后续批次的服务身份收紧）。
 - `trust/RequestIdentityContext`：请求级只读身份上下文（principalId、clientKind、tenantId），从网关注入的 `X-Aspen-*` 头解析。
 - 装配 `TenantContextSupplier` 给 common-database 的 fail-closed 租户链，取代 Admin 临时的 `TenantHeaderFilter` 装配。
-- 配置键：`aspen.security.enabled`（默认开启，本地无网关联调可关）。
+- 配置键：`aspen.security.enabled`（默认开启，本地无网关联调可关）、`aspen.security.trust-token`（期望的网关信任凭据，经环境变量注入）。
 
 ## 10. 服务接入与验收
 

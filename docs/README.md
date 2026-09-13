@@ -14,7 +14,7 @@
 | [admin-sys-data-model.md](./admin-sys-data-model.md) | Admin SYS 数据模型 | SYS 字典、参数与路由表结构、内置与敏感标记、可用性与分发语义 | 不包含 Controller/Service 等运行实现设计 |
 | [storage-data-model.md](./storage-data-model.md) | Storage 文件存储数据模型 | 文件存储 4 表结构、多后端配置、秒传与分片续传语义、过期清理约定 | 不包含上传 API、FileClient 实现与对象回收等运行实现设计 |
 | [task-data-model.md](./task-data-model.md) | Task 统一任务数据模型 | 任务定义/租户圈定/执行记录表结构、Quartz 集群与对账语义、HTTP 投递与 SSRF 防护约定 | 不包含 RBAC、消息通道投递与告警通知等运行实现设计 |
-| [auth-data-model.md](./auth-data-model.md) | 认证数据模型 | 端注册/端×登录方式/主体凭据三层模型、令牌与会话语义、Principal SPI 契约、配置分发 | 不包含网关过滤器实现与业务服务接入细节 |
+| [auth-data-model.md](./auth-data-model.md) | 认证数据模型 | 端注册/端×登录方式/主体凭据三层模型、令牌与会话语义、Principal SPI 契约、本库直读与管理面归属 | 不包含网关过滤器实现与业务服务接入细节 |
 | [dev-deployment.md](./dev-deployment.md) | 开发环境部署与 Nacos 配置中心 | 本地 compose 怎么起、Nacos 鉴权与种子机制、dataId 分层、客户端接线 | 不定义生产拓扑与备份恢复策略（见技术方案） |
 | [roles/code-reviewer.md](./roles/code-reviewer.md) | 代码审查官角色设定 | 代码提交审查时扮演什么角色、按什么清单审查、意见如何分级输出 | 不定义架构规范本身，只引用《技术架构》条款 |
 

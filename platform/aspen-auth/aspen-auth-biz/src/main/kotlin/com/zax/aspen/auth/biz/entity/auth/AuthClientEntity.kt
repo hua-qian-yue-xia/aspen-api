@@ -1,4 +1,4 @@
-package com.zax.aspen.admin.biz.entity.sys
+package com.zax.aspen.auth.biz.entity.auth
 
 import com.zax.aspen.auth.api.enums.auth.AuthClientKind
 import com.zax.aspen.common.core.enums.common.EnabledStatus
@@ -11,18 +11,19 @@ import org.babyfish.jimmer.sql.Id
 import org.babyfish.jimmer.sql.Table
 
 /**
- * 保存统一认证的端注册, 是认证客户端配置分发的唯一权威源
+ * 保存统一认证的端注册, 认证引擎按端类型本库直读的唯一权威源
  *
- * 典型场景: 管理端经认证管理面维护端定义, Admin 在配置变更后与启动时把全部启用端
- * 构建为版本化快照发布到 Redis, Auth 只读消费; 端是平台级配置, 全体租户共用,
- * 不做租户隔离; 机器端密钥只存不可逆摘要, 明文仅在创建或轮换时展示一次
+ * 典型场景: 认证引擎登录时按端类型查启用端取令牌 TTL 与方式策略入口, 管理面
+ * (后续批次) 经 controller/admin 的 /admin-api/auth-client 维护; 端是平台级配置,
+ * 全体租户共用, 不做租户隔离; 机器端密钥只存不可逆摘要, 明文仅在创建或轮换时
+ * 展示一次; 2026-09-13 归属修订: 自 Admin sys 迁入 Auth Schema, 快照分发链路退役
  */
 @Entity
-@Table(name = "sys_auth_client")
-interface SysAuthClientEntity : MutableAuditEntity {
+@Table(name = "auth_client")
+interface AuthClientEntity : MutableAuditEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val authClientId: Long
+    val clientId: Long
 
     /** 端编码, 小写中划线格式, 全局唯一, 创建后不可修改 */
     val clientCode: String
@@ -39,13 +40,13 @@ interface SysAuthClientEntity : MutableAuditEntity {
     /** 摘要算法标识, 与 upm_user_credential 同约定, 供未来算法升级区分存量行 */
     val hashAlgorithm: String?
 
-    /** 访问令牌 TTL 覆盖 (秒); null 表示 Auth 使用全局默认值 */
+    /** 访问令牌 TTL 覆盖 (秒); null 表示使用全局默认值 */
     val accessTokenTtlSeconds: Long?
 
-    /** 刷新令牌 TTL 覆盖 (秒); null 表示 Auth 使用全局默认值 */
+    /** 刷新令牌 TTL 覆盖 (秒); null 表示使用全局默认值 */
     val refreshTokenTtlSeconds: Long?
 
-    /** 端启停状态; disabled 的端不进入发布快照, 该端全部登录方式即时不可用 */
+    /** 端启停状态; disabled 的端登录即时拒绝 */
     @Default("ENABLED")
     val status: EnabledStatus
 }

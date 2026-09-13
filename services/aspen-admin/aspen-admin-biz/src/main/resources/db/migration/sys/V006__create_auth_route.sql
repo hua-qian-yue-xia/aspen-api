@@ -1,6 +1,8 @@
 -- Aspen Admin SYS schema, auth service gateway routes
 -- 认证服务的受众前缀路由: /admin-api/auth 与 /app-api/auth 均指向 aspen-auth-biz,
--- 排序先于 admin 兜底路由 (sort_order 5 < 100), 空过滤器原样转发 (前缀由 common-web 在服务侧挂载)
+-- 排序先于 admin 兜底路由 (sort_order 5 < 100), 空过滤器原样转发 (前缀由 common-web 在服务侧挂载);
+-- 版本号说明: 原编号 V006 曾用于端注册两表, 2026-09-13 归属修订迁入 aspen_auth 后移除,
+-- 因尚无环境执行过迁移, 本文件递补 V006 空号
 
 INSERT INTO `sys_route`
     (`route_code`, `route_name`, `uri`, `predicates`, `filters`, `metadata`, `sort_order`, `status`, `created_by`, `updated_by`)

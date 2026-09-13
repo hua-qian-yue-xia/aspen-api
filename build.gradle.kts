@@ -45,8 +45,8 @@ allprojects {
             }
             // common 基础设施模块的项目依赖白名单: database/cache/gen/web 只认 core;
             // gateway 只认 core/cache/gateway-contract, 不依赖 database (common-module-design §1);
-            // security 承载认证配置分发 SDK 与业务进程最小信任链, 依赖 core (头常量) /
-            // database (TenantContextSupplier) / cache (分发原语)
+            // security 承载业务进程最小信任链, 依赖 core (头常量) 与 database (TenantContextSupplier),
+            // 无 Redis 依赖 (快照分发 SDK 已随端配置回归 Auth 本库直读移除)
             val commonProjectDependencyWhitelist = mapOf(
                 AspenProjects.COMMON_DATABASE to setOf(AspenProjects.COMMON_CORE),
                 AspenProjects.COMMON_CACHE to setOf(AspenProjects.COMMON_CORE),
@@ -60,7 +60,6 @@ allprojects {
                 AspenProjects.COMMON_SECURITY to setOf(
                     AspenProjects.COMMON_CORE,
                     AspenProjects.COMMON_DATABASE,
-                    AspenProjects.COMMON_CACHE,
                 ),
             )
             commonProjectDependencyWhitelist[sourceProjectPath]?.let { allowedProjectPaths ->

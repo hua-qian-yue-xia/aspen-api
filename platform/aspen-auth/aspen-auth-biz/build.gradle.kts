@@ -35,7 +35,7 @@ dependencies {
     implementation(libs.spring.boot.starter.webmvc)
     // auth_session/auth_login_log 的 Jimmer 持久化
     implementation(project(AspenProjects.COMMON_DATABASE))
-    // 客户端配置快照消费 (Store) 传递依赖 common-cache 的 Redis 分发原语
+    // 业务进程最小信任链: logout 经网关携带身份头, Auth 侧同样校验 InternalTrustFilter
     implementation(project(AspenProjects.COMMON_SECURITY))
     // JWT 签发与 JWKS 发布 (Nimbus), 只取 jose 不引入资源服务器过滤链 (验签在网关)
     implementation(libs.spring.security.oauth2.jose)

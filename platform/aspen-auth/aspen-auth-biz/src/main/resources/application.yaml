@@ -27,8 +27,6 @@ jimmer:
 
 aspen:
   security:
-    # 客户端配置快照的分发介质环境段, 与 Admin 发布侧保持一致
-    environment: local
     # 期望的网关信任凭据, 与网关侧一致; logout 经网关注入身份头后需要校验
     trust-token: ${ASPEN_GATEWAY_INTERNAL_SECRET:}
   auth:

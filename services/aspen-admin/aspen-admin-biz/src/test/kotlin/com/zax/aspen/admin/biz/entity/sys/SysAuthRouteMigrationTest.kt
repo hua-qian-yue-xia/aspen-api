@@ -7,9 +7,10 @@ import kotlin.test.assertTrue
 /**
  * 验证认证服务的路由种子迁移
  *
- * V007 为 aspen-auth-biz 建立 /admin-api/auth 与 /app-api/auth 两条受众前缀路由:
- * 排序 5 先于 admin 兜底路由 (100) 与任务路由 (10), 空过滤器原样转发 (无 StripPrefix,
- * common-web 已在认证服务侧挂好前缀)
+ * V006 (原 V007, 端配置两表迁入 aspen_auth 后递补空号) 为 aspen-auth-biz 建立
+ * /admin-api/auth 与 /app-api/auth 两条受众前缀路由: 排序 5 先于 admin 兜底路由
+ * (100) 与任务路由 (10), 空过滤器原样转发 (无 StripPrefix, common-web 已在认证
+ * 服务侧挂好前缀)
  */
 class SysAuthRouteMigrationTest {
     /** 验证两条认证路由以优先排序插入且指向 aspen-auth-biz */
@@ -43,7 +44,7 @@ class SysAuthRouteMigrationTest {
 
     /** 保存测试使用的资源常量 */
     private companion object {
-        /** 认证路由种子的迁移版本 */
-        const val MIGRATION_RESOURCE = "/db/migration/sys/V007__create_auth_route.sql"
+        /** 认证路由种子的迁移版本 (原 V007, 空号递补后为 V006) */
+        const val MIGRATION_RESOURCE = "/db/migration/sys/V006__create_auth_route.sql"
     }
 }

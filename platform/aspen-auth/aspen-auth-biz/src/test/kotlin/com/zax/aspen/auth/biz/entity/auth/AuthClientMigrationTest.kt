@@ -1,4 +1,4 @@
-package com.zax.aspen.admin.biz.entity.sys
+package com.zax.aspen.auth.biz.entity.auth
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -6,22 +6,21 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * 验证统一认证的端注册与登录方式策略迁移
+ * 验证端注册与登录方式策略迁移 (Auth Schema V002)
  *
- * V006 建立端注册 (sys_auth_client) 与端×登录方式 (sys_auth_login_method) 两表:
- * 断言覆盖表集、端编码与 (端, 方式) 唯一约束、方式行级联删除、管理端种子行
- * 与「种子不携带凭据字面量」的密钥边界
+ * 两表 2026-09-13 归属修订自 Admin sys 迁入: 断言覆盖表集、端编码与 (端, 方式)
+ * 唯一约束、方式行级联删除、管理端种子行与「种子不携带凭据字面量」的密钥边界
  */
-class SysAuthClientMigrationTest {
-    /** 验证迁移只创建两张认证配置表并使用统一字符集 */
+class AuthClientMigrationTest {
+    /** 验证迁移创建端注册与登录方式两张表并使用统一字符集 */
     @Test
-    fun `creates the complete auth client schema`() {
+    fun `creates the complete client schema`() {
         val tableNames = Regex("CREATE TABLE `([^`]+)`", RegexOption.IGNORE_CASE)
             .findAll(migrationSql)
             .map { it.groupValues[1] }
             .toList()
 
-        assertEquals(listOf("sys_auth_client", "sys_auth_login_method"), tableNames)
+        assertEquals(listOf("auth_client", "auth_login_method"), tableNames)
         assertEquals(2, Regex("COLLATE = utf8mb4_0900_ai_ci", RegexOption.IGNORE_CASE).findAll(migrationSql).count())
     }
 
@@ -29,9 +28,10 @@ class SysAuthClientMigrationTest {
     @Test
     fun `keeps uniqueness and cascade constraints`() {
         listOf(
-            "uk_sys_auth_client_code",
-            "uk_sys_auth_login_method_client_method",
-            "idx_sys_auth_client_status",
+            "uk_auth_client_code",
+            "uk_auth_login_method_client_method",
+            "idx_auth_client_status",
+            "idx_auth_login_method_status_sort",
         ).forEach { constraintName ->
             assertTrue(migrationSql.contains("`$constraintName`"), "缺少 $constraintName")
         }
@@ -48,7 +48,7 @@ class SysAuthClientMigrationTest {
         assertTrue(migrationSql.contains("'password', 'slider', TRUE, 90"), "缺少密码登录方式种子行")
     }
 
-    /** 验证种子不写入任何密钥摘要, secret_hash 只允许经管理面或 bootstrap 写入 */
+    /** 验证种子不写入任何密钥摘要, secret_hash 只允许经管理面或运行时写入 */
     @Test
     fun `seeds carry no credential literals`() {
         val insertStatements = Regex("INSERT INTO[^;]+;", RegexOption.IGNORE_CASE)
@@ -58,7 +58,7 @@ class SysAuthClientMigrationTest {
         assertTrue(!insertStatements.contains(Regex("\\$2[aby]\\$")), "种子不得携带 BCrypt 字面量")
     }
 
-    /** 从测试类路径读取 V006 认证配置迁移脚本 */
+    /** 从测试类路径读取 V002 端注册迁移脚本 */
     private val migrationSql: String by lazy {
         val resource = assertNotNull(javaClass.getResourceAsStream(MIGRATION_RESOURCE))
         resource.bufferedReader().use { it.readText() }
@@ -66,7 +66,7 @@ class SysAuthClientMigrationTest {
 
     /** 保存测试使用的资源常量 */
     private companion object {
-        /** 认证端注册与登录方式策略的迁移版本 */
-        const val MIGRATION_RESOURCE = "/db/migration/sys/V006__create_sys_auth_client.sql"
+        /** 端注册与登录方式策略的迁移版本 */
+        const val MIGRATION_RESOURCE = "/db/migration/V002__create_auth_client.sql"
     }
 }

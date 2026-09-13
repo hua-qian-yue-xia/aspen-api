@@ -1,22 +1,25 @@
 package com.zax.aspen.auth.biz.service.auth
 
 import com.zax.aspen.auth.api.dto.auth.LoginResponse
+import com.zax.aspen.auth.api.dto.auth.PasswordVerifyRequest
 import com.zax.aspen.auth.api.dto.auth.PasswordVerifyStatus
+import com.zax.aspen.auth.api.dto.auth.UserPrincipalDto
 import com.zax.aspen.auth.api.enums.auth.AuthClientKind
 import com.zax.aspen.auth.api.enums.auth.AuthLoginMethodType
-import com.zax.aspen.auth.api.enums.auth.CaptchaKind
 import com.zax.aspen.auth.biz.captcha.CaptchaGateways
 import com.zax.aspen.auth.biz.config.AspenAuthProperties
+import com.zax.aspen.auth.biz.entity.auth.AuthClientEntity
+import com.zax.aspen.auth.biz.entity.auth.AuthLoginMethodEntity
+import com.zax.aspen.auth.biz.entity.auth.AuthSessionEntity
 import com.zax.aspen.auth.biz.enums.auth.AuthLoginResult
 import com.zax.aspen.auth.biz.principal.PrincipalGateway
+import com.zax.aspen.auth.biz.repository.auth.AuthClientRepository
+import com.zax.aspen.auth.biz.repository.auth.AuthLoginMethodRepository
 import com.zax.aspen.auth.biz.repository.auth.AuthLoginLogRepository
 import com.zax.aspen.auth.biz.repository.auth.AuthSessionRepository
 import com.zax.aspen.auth.biz.token.AuthTokenService
 import com.zax.aspen.common.core.error.BusinessException
 import com.zax.aspen.common.core.error.CommonErrorCode
-import com.zax.aspen.common.security.consume.ClientConfigSnapshotStore
-import com.zax.aspen.common.security.snapshot.AuthClientSnapshot
-import com.zax.aspen.common.security.snapshot.AuthLoginMethodSnapshot
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -29,15 +32,17 @@ import java.util.Base64
 /**
  * 统一认证引擎: 登录、刷新与登出的编排主干
  *
- * 引擎只有一条主干「找主体 -> 验凭据 -> 发令牌」: 按端类型从客户端配置快照取
- * 端与登录方式策略, 验证码闸门与主体 SPI 按策略分派; 失败按 AuthLoginResult
- * 分类落登录审计后抛 401 语义 (账号不存在与密码错误对外同提示); 刷新为轮换式
- * (旧摘要覆盖即作废), 刷新前复查主体状态拦截被禁用主体; 登出吊销会话, 访问
- * 令牌不建黑名单, 靠短 TTL 自然过期 (技术架构 14.2)
+ * 引擎只有一条主干「找主体 -> 验凭据 -> 发令牌」: 按端类型从本库 auth_client/
+ * auth_login_method 直读端与方式策略 (配置变更即时生效, 无分发介质), 验证码闸门
+ * 与主体 SPI 按策略分派; 失败按 AuthLoginResult 分类落登录审计后抛 401 语义
+ * (账号不存在与密码错误对外同提示); 刷新为轮换式 (旧摘要覆盖即作废), 刷新前复查
+ * 主体状态拦截被禁用主体; 登出吊销会话, 访问令牌不建黑名单, 靠短 TTL 自然过期
+ * (技术架构 14.2)
  */
 @Service
 class AuthLoginService(
-    private val clientConfigSnapshotStore: ClientConfigSnapshotStore,
+    private val authClientRepository: AuthClientRepository,
+    private val authLoginMethodRepository: AuthLoginMethodRepository,
     private val captchaGateways: CaptchaGateways,
     private val principalGateway: PrincipalGateway,
     private val authSessionRepository: AuthSessionRepository,
@@ -55,25 +60,25 @@ class AuthLoginService(
      */
     @Transactional
     fun login(command: LoginCommand): LoginResponse {
-        val client = clientConfigSnapshotStore.currentSnapshots()
-            .firstOrNull { it.clientKind == command.clientKind.code }
+        val client = authClientRepository.findEnabledByKind(command.clientKind)
         if (client == null) {
             audit(command, null, AuthLoginResult.FAILED_METHOD, "client-missing")
             throw BusinessException(CommonErrorCode.UNAUTHORIZED, "当前端未开放登录")
         }
-        val method = client.methods.firstOrNull { it.method == AuthLoginMethodType.PASSWORD.code }
+        val method = authLoginMethodRepository.findEnabledByClient(client.clientId)
+            .firstOrNull { it.method == AuthLoginMethodType.PASSWORD }
         if (method == null) {
-            audit(command, null, AuthLoginResult.FAILED_METHOD, "password-missing")
+            audit(command, client.clientCode, AuthLoginResult.FAILED_METHOD, "password-missing")
             throw BusinessException(CommonErrorCode.UNAUTHORIZED, "当前端未开放账号密码登录")
         }
         try {
-            captchaGateways.byKind(captchaKindOf(method)).verify(command.request.captchaToken)
+            captchaGateways.byKind(method.captchaKind).verify(command.request.captchaToken)
         } catch (e: BusinessException) {
-            audit(command, null, AuthLoginResult.FAILED_CAPTCHA, e.errorCode.code)
+            audit(command, client.clientCode, AuthLoginResult.FAILED_CAPTCHA, e.errorCode.code)
             throw e
         }
         val verification = principalGateway.verifyPassword(
-            com.zax.aspen.auth.api.dto.auth.PasswordVerifyRequest(
+            PasswordVerifyRequest(
                 account = command.request.account,
                 secret = command.request.password,
             ),
@@ -82,19 +87,19 @@ class AuthLoginService(
             PasswordVerifyStatus.OK -> {
                 val principal = requireNotNull(verification.principal)
                 val response = issue(command, client, method, principal)
-                audit(command, principal.principalId, AuthLoginResult.SUCCESS, null)
+                audit(command, client.clientCode, AuthLoginResult.SUCCESS, null, principal.principalId)
                 return response
             }
             PasswordVerifyStatus.LOCKED -> {
-                audit(command, verification.principal?.principalId, AuthLoginResult.FAILED_LOCKED, null)
+                audit(command, client.clientCode, AuthLoginResult.FAILED_LOCKED, null, verification.principal?.principalId)
                 throw BusinessException(CommonErrorCode.UNAUTHORIZED, LOCKED_MESSAGE)
             }
             PasswordVerifyStatus.DISABLED -> {
-                audit(command, verification.principal?.principalId, AuthLoginResult.FAILED_DISABLED, null)
+                audit(command, client.clientCode, AuthLoginResult.FAILED_DISABLED, null, verification.principal?.principalId)
                 throw BusinessException(CommonErrorCode.UNAUTHORIZED, DISABLED_MESSAGE)
             }
             else -> {
-                audit(command, verification.principal?.principalId, AuthLoginResult.FAILED_CREDENTIALS, verification.status.name)
+                audit(command, client.clientCode, AuthLoginResult.FAILED_CREDENTIALS, verification.status.name, verification.principal?.principalId)
                 throw BusinessException(CommonErrorCode.UNAUTHORIZED, BAD_CREDENTIALS_MESSAGE)
             }
         }
@@ -124,8 +129,8 @@ class AuthLoginService(
             throw BusinessException(CommonErrorCode.UNAUTHORIZED, DISABLED_MESSAGE)
         }
         val client = requireNotNull(
-            clientConfigSnapshotStore.findByCode(session.clientCode),
-        ) { "会话端已不存在于快照: ${session.clientCode}" }
+            authClientRepository.findByCode(session.clientCode),
+        ) { "会话端已不存在: ${session.clientCode}" }
         return rotateAndIssue(client, session, principal, now)
     }
 
@@ -145,16 +150,16 @@ class AuthLoginService(
      * 签发令牌对并落新会话
      *
      * @param command 登录指令
-     * @param client 端快照
-     * @param method 登录方式行快照
+     * @param client 端实体
+     * @param method 密码登录方式行
      * @param principal 主体最小视图
      * @return 令牌回执
      */
     private fun issue(
         command: LoginCommand,
-        client: AuthClientSnapshot,
-        method: AuthLoginMethodSnapshot,
-        principal: com.zax.aspen.auth.api.dto.auth.UserPrincipalDto,
+        client: AuthClientEntity,
+        method: AuthLoginMethodEntity,
+        principal: UserPrincipalDto,
     ): LoginResponse {
         val now = LocalDateTime.now(clock)
         val refreshToken = generateRefreshToken()
@@ -170,22 +175,22 @@ class AuthLoginService(
             expiresAt = now.plusSeconds(refreshTtl),
             now = now,
         )
-        return buildResponse(client, principal, refreshToken, mustChange(command, method, principal))
+        return buildResponse(client, principal, refreshToken, mustChange(method, principal))
     }
 
     /**
      * 轮换会话摘要并发新令牌对
      *
-     * @param client 端快照
+     * @param client 端实体
      * @param session 既有会话
      * @param principal 复查后的主体视图
      * @param now 刷新时刻
      * @return 令牌回执
      */
     private fun rotateAndIssue(
-        client: AuthClientSnapshot,
-        session: com.zax.aspen.auth.biz.entity.auth.AuthSessionEntity,
-        principal: com.zax.aspen.auth.api.dto.auth.UserPrincipalDto,
+        client: AuthClientEntity,
+        session: AuthSessionEntity,
+        principal: UserPrincipalDto,
         now: LocalDateTime,
     ): LoginResponse {
         val refreshToken = generateRefreshToken()
@@ -197,22 +202,22 @@ class AuthLoginService(
     /**
      * 组装令牌回执: 签发访问令牌并携带强制改密标记
      *
-     * @param client 端快照
+     * @param client 端实体
      * @param principal 主体视图
      * @param refreshToken 新刷新令牌明文 (摘要已落库)
      * @param mustChangePassword 是否触发强制改密
      * @return 登录/刷新回执
      */
     private fun buildResponse(
-        client: AuthClientSnapshot,
-        principal: com.zax.aspen.auth.api.dto.auth.UserPrincipalDto,
+        client: AuthClientEntity,
+        principal: UserPrincipalDto,
         refreshToken: String,
         mustChangePassword: Boolean,
     ): LoginResponse {
         val accessTtl = client.accessTokenTtlSeconds ?: properties.jwt.accessTokenTtlSeconds
         val accessToken = authTokenService.issueAccessToken(
             principalId = principal.principalId,
-            clientKind = AuthClientKind.entries.first { it.code == client.clientKind },
+            clientKind = client.clientKind,
             clientCode = client.clientCode,
             tenantId = principal.tenantId,
             ttlSeconds = accessTtl,
@@ -229,16 +234,11 @@ class AuthLoginService(
     /**
      * 判定是否触发强制改密: 用户域标记或密码有效期策略 (从未改密按最严格处理)
      *
-     * @param command 登录指令
-     * @param method 登录方式行快照
+     * @param method 密码登录方式行
      * @param principal 主体视图
      * @return 需要强制改密时为 `true`
      */
-    private fun mustChange(
-        command: LoginCommand,
-        method: AuthLoginMethodSnapshot,
-        principal: com.zax.aspen.auth.api.dto.auth.UserPrincipalDto,
-    ): Boolean {
+    private fun mustChange(method: AuthLoginMethodEntity, principal: UserPrincipalDto): Boolean {
         if (principal.mustChangePassword) {
             return true
         }
@@ -248,25 +248,21 @@ class AuthLoginService(
     }
 
     /**
-     * 解析方式行的验证码闸门; 快照行携带未知 code 时按最严格的 SLIDER 处理
-     *
-     * @param method 登录方式行快照
-     * @return 闸门类型枚举
-     */
-    private fun captchaKindOf(method: AuthLoginMethodSnapshot): CaptchaKind =
-        CaptchaKind.entries.firstOrNull { it.code == method.captchaKind } ?: CaptchaKind.SLIDER
-
-    /**
      * 追加登录审计行; 失败路径不阻断原始异常
      *
      * @param command 登录指令
-     * @param principalId 已解析出的主体标识, 未解析出为 null
+     * @param clientCode 已定位的端编码, 端未开放时为 null
      * @param result 登录结果分类
      * @param failureCode 细化失败码, 可为 null
+     * @param principalId 已解析出的主体标识, 未解析出为 null
      */
-    private fun audit(command: LoginCommand, principalId: Long?, result: AuthLoginResult, failureCode: String?) {
-        val clientCode = clientConfigSnapshotStore.currentSnapshots()
-            .firstOrNull { it.clientKind == command.clientKind.code }?.clientCode
+    private fun audit(
+        command: LoginCommand,
+        clientCode: String?,
+        result: AuthLoginResult,
+        failureCode: String?,
+        principalId: Long? = null,
+    ) {
         try {
             authLoginLogRepository.append(
                 clientKind = command.clientKind.code,

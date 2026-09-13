@@ -1,4 +1,4 @@
-package com.zax.aspen.admin.biz.entity.sys
+package com.zax.aspen.auth.biz.entity.auth
 
 import com.zax.aspen.auth.api.enums.auth.AuthLoginMethodType
 import com.zax.aspen.auth.api.enums.auth.CaptchaKind
@@ -20,23 +20,23 @@ import org.babyfish.jimmer.sql.Table
  *
  * 典型场景: 认证引擎登录时按端查方式行, 决定用哪条认证主干、挂哪个人机校验闸门、
  * 是否触发首登强制改密与密码有效期; 表值只是选择器, 协议步骤是 Auth 内按方式枚举
- * 实现的代码; 变更随端一起进入发布快照, (端, 方式) 唯一
+ * 实现的代码; (端, 方式) 唯一, 方式行随端级联删除
  */
 @Entity
-@Table(name = "sys_auth_login_method")
-interface SysAuthLoginMethodEntity : MutableAuditEntity {
+@Table(name = "auth_login_method")
+interface AuthLoginMethodEntity : MutableAuditEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val authLoginMethodId: Long
+    val loginMethodId: Long
 
     /** 所属端; 方式行随端级联删除, 端下线时策略一起退场 */
     @ManyToOne
-    @JoinColumn(name = "auth_client_id", referencedColumnName = "auth_client_id")
-    val client: SysAuthClientEntity
+    @JoinColumn(name = "client_id", referencedColumnName = "client_id")
+    val client: AuthClientEntity
 
-    /** 所属端主键; client 关联的标量视图, 分组查询与快照构建按端归类时使用 */
+    /** 所属端主键; client 关联的标量视图, 按端归类查询方式行时使用 */
     @IdView("client")
-    val authClientId: Long
+    val clientId: Long
 
     /** 登录方式; 认证引擎按本值分发实现, PASSWORD 系走主体+静态凭据主干 */
     val method: AuthLoginMethodType
@@ -56,11 +56,11 @@ interface SysAuthLoginMethodEntity : MutableAuditEntity {
     @Serialized
     val config: Map<String, String>?
 
-    /** 登录页展示顺序, 发布快照按本列升序排列 */
+    /** 登录页展示顺序, 方式行查询按本列升序排列 */
     @Default("0")
     val sortOrder: Int
 
-    /** 方式启停状态; disabled 的方式行即时不可登录, 不进入发布快照 */
+    /** 方式启停状态; disabled 的方式行即时不可登录 */
     @Default("ENABLED")
     val status: EnabledStatus
 }
