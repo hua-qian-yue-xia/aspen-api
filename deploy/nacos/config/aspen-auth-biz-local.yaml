@@ -1,0 +1,3 @@
+# Aspen Auth 本地环境配置 (dataId: aspen-auth-biz-local.yaml, Group: DEFAULT_GROUP)
+# 占位种子: aspen_auth 数据源与运行配置待服务接入数据库后填充到 Nacos 的 aspen-auth-biz;
+# 密钥类取值 (JWT 私钥、验证码凭据、网关信任凭据) 一律走环境变量, 不进配置中心

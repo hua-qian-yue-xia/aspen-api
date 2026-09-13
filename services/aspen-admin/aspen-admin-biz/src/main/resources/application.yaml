@@ -25,3 +25,11 @@ spring:
 # kotlin 时直接产出 KSqlClient, Kotlin Repository 按类型注入, 无需任何桥接 Bean
 jimmer:
   language: kotlin
+
+aspen:
+  security:
+    # 客户端配置快照的分发介质环境段, 与 Auth 消费侧保持一致
+    environment: local
+    # 期望的网关信任凭据, 与网关侧 ASPEN_GATEWAY_INTERNAL_SECRET 一致;
+    # 未配置时携带身份头的请求一律 fail-closed 拒绝
+    trust-token: ${ASPEN_GATEWAY_INTERNAL_SECRET:}

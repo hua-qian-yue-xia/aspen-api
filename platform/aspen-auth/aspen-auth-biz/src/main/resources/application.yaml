@@ -29,6 +29,8 @@ aspen:
   security:
     # 客户端配置快照的分发介质环境段, 与 Admin 发布侧保持一致
     environment: local
+    # 期望的网关信任凭据, 与网关侧一致; logout 经网关注入身份头后需要校验
+    trust-token: ${ASPEN_GATEWAY_INTERNAL_SECRET:}
   auth:
     # JWT 签发私钥 (PKCS#8 base64) 与密钥标识只经环境变量注入, 不进配置中心与仓库
     jwt:
