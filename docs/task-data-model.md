@@ -78,7 +78,7 @@ platform/aspen-task/aspen-task-biz/src/main/resources/db/migration/          # V
 - 管理面契约 `TaskApi`（task-api `contract/`，Controller 位于 `controller/admin/task` 经 common-web 自动挂 `/admin-api/task/**`）：创建/更新/启停/删除/手动触发/详情/分页/下次触发预览/执行记录分页/失败重派。入参 Bean Validation（jakarta）+ Service 层语义校验（require），出参为不可变 VO；分页复用 common-core `PageQuery/PageResult`，受 `DatabaseLimits` 约束。
 - 手动触发 `POST /admin-api/task/{definitionId}/trigger`：可选 `requestId` 幂等键（缺省服务端生成）；走与计划触发完全相同的投递链路（Quartz 立即触发 + MANUAL 来源标记），便于在准生产环境演练任务。
 - 网关路由种子（Admin sys V005）：`/admin-api/task/**` → `lb://aspen-task-biz`（sort_order=10），Admin 兜底路由 `/admin-api/**` 抬升至 sort_order=100——sys_route.sort_order 是 INT UNSIGNED 无法取负，用「具体前缀靠前、兜底靠后」实现优先匹配。
-- 租户头接收侧（Admin）以 opt-in 装配（`aspen.admin.tenant-header.enabled`，默认关）：解析 `X-Aspen-Tenant-Id` 填充 `TenantContextSupplier`，仅限网关/任务服务内网调用链启用；RBAC 就绪后由统一认证接管。
+- 租户头接收侧由 `aspen-common-security` 统一承载（2026-09-13 起，Admin 临时 opt-in 装配已删除）：解析经信任链校验的 `X-Aspen-Tenant-Id` 填充 `TenantContextSupplier`；任务投递直连目标端口时同时携带内部信任凭据（`ASPEN_GATEWAY_INTERNAL_SECRET`，与网关→业务侧共享），否则携带身份头的直连请求会被最小信任链 fail-closed 拒绝；服务身份批次落地后替换为独立短期服务身份。
 
 ## 9. Schema 管理
 

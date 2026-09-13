@@ -3,6 +3,7 @@ package com.zax.aspen.task.biz.service.task
 import com.zax.aspen.admin.api.dto.upm.TenantBriefDto
 import com.zax.aspen.common.core.enums.common.EnabledStatus
 import com.zax.aspen.common.core.constant.TenantHttpHeaders
+import com.zax.aspen.common.core.constant.UserHttpHeaders
 import com.zax.aspen.task.api.constant.TaskHttpHeaders
 import com.zax.aspen.task.api.enums.TaskConcurrentPolicy
 import com.zax.aspen.task.api.enums.TaskExecutionStatus
@@ -48,6 +49,7 @@ class TaskDispatchHandler(
     private val httpDispatcher: TaskHttpDispatcher,
     private val synchronizer: QuartzTaskSynchronizer,
     private val properties: AspenTaskProperties,
+    private val environment: org.springframework.core.env.Environment,
     @Qualifier(AspenTaskConfiguration.TASK_DISPATCH_EXECUTOR)
     private val dispatchExecutor: ThreadPoolTaskExecutor,
 ) {
@@ -236,7 +238,11 @@ class TaskDispatchHandler(
     }
 
     /**
-     * 执行一次 HTTP 投递: 渲染租户占位符 → 合并溯源与租户头 → 投递 → 回写终态
+     * 执行一次 HTTP 投递: 渲染租户占位符 → 合并溯源、租户与内部信任头 → 投递 → 回写终态
+     *
+     * 租户头之外同时携带内部信任凭据 (与网关→业务侧同一凭据): 目标服务的
+     * aspen-common-security 最小信任链对携带身份头的直连请求 fail-closed,
+     * 无信任头会被 401 拒绝; 服务身份批次落地后切换为独立短期服务身份
      *
      * @param definition 任务定义实体
      * @param execution RUNNING 执行实体
@@ -256,6 +262,9 @@ class TaskDispatchHandler(
                 TaskHttpHeaders.FIRE_TIME,
                 execution.fireTime.atZone(ZoneId.systemDefault()).toOffsetDateTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
             )
+            environment.getProperty(INTERNAL_TRUST_PROPERTY)?.takeIf { it.isNotBlank() }?.let {
+                put(UserHttpHeaders.GATEWAY_TRUST_TOKEN, it)
+            }
         }
         val result = httpDispatcher.dispatch(
             TaskHttpRequest(
@@ -324,5 +333,8 @@ class TaskDispatchHandler(
 
         /** 调度链路写入审计列的系统身份 */
         const val DISPATCH_IDENTITY = "system:task-dispatch"
+
+        /** 内部信任凭据的环境变量键, 与网关→业务侧共享, 未配置时不携带信任头 */
+        const val INTERNAL_TRUST_PROPERTY = "ASPEN_GATEWAY_INTERNAL_SECRET"
     }
 }
