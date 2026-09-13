@@ -178,6 +178,22 @@ class AspenWebExceptionHandler(
     }
 
     /**
+     * 渲染服务层参数与状态校验失败
+     *
+     * 服务层校验惯用法是 `require(message)`, 抛出的 IllegalArgumentException 消息面向
+     * 调用方书写且可安全外发; 不加本处理器会落入兜底 500, 把客户端可修正的失败
+     * 误报成服务端故障
+     *
+     * @param exception 服务层 require 抛出的校验异常
+     * @return 400 Problem Details, detail 直接外发异常携带的中文消息
+     */
+    @ExceptionHandler(IllegalArgumentException::class)
+    fun handleIllegalArgument(exception: IllegalArgumentException): ProblemDetail {
+        logger.warn("服务层校验失败 detail={}", exception.message)
+        return problem(HttpStatus.BAD_REQUEST, CommonErrorCode.INVALID_ARGUMENT, exception.message.orEmpty())
+    }
+
+    /**
      * 渲染未匹配路由
      *
      * @param exception 静态资源/路由未命中的异常

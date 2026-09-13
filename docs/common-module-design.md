@@ -334,7 +334,7 @@ aspen:
 - `title` 取 `ErrorCode.defaultMessage`，`detail` 取 `BusinessException.detail`（必须可安全返回给调用方，敏感诊断只进日志或 `cause`）；`code` 与 `traceId` 是扩展字段，前者是稳定机器错误码，后者用于排查。
 - `type` 在错误文档站真实存在前保持默认 `about:blank`，机器判别一律以 `code` 为准；不凭空发明会漂移的 URI。
 - 状态映射：`INVALID_ARGUMENT`→400、`METHOD_NOT_ALLOWED`→405、`UNSUPPORTED_MEDIA_TYPE`→415、`RESOURCE_NOT_FOUND`→404、`UNAUTHORIZED`→401、`FORBIDDEN`→403、`STATE_CONFLICT`→409、`TOO_MANY_REQUESTS`→429（路由套件限流超限，§8.3）、`DEPENDENCY_UNAVAILABLE`→503、`INTERNAL_ERROR`→500；未登记的业务错误码默认 400，需要精确状态码时在映射表登记。
-- 参数校验失败（`@Valid` 请求体、方法级校验、服务层 `@Validated` 的 `ConstraintViolationException`）、不可读请求体、缺少必填请求参数、参数类型不匹配统一映射为 400 `COMMON.INVALID_ARGUMENT`；HTTP 方法不支持映射 405 `COMMON.METHOD_NOT_ALLOWED`（detail 指明被拒绝的方法）、请求媒体类型不支持映射 415 `COMMON.UNSUPPORTED_MEDIA_TYPE`（detail 回显客户端发送的 Content-Type）；未匹配路由统一 404 `COMMON.RESOURCE_NOT_FOUND`；兜底异常统一 500 `COMMON.INTERNAL_ERROR` 且 `detail` 只给安全消息，原始异常与堆栈只随 traceId 写日志。协议级客户端错误必须精确渲染为对应 4xx，不得落入兜底 500。
+- 参数校验失败（`@Valid` 请求体、方法级校验、服务层 `@Validated` 的 `ConstraintViolationException`）、不可读请求体、缺少必填请求参数、参数类型不匹配统一映射为 400 `COMMON.INVALID_ARGUMENT`；服务层 `require` 校验惯用法抛出的 `IllegalArgumentException` 同样渲染 400（detail 外发其面向调用方书写的中文消息），避免客户端可修正的失败落入兜底 500；HTTP 方法不支持映射 405 `COMMON.METHOD_NOT_ALLOWED`（detail 指明被拒绝的方法）、请求媒体类型不支持映射 415 `COMMON.UNSUPPORTED_MEDIA_TYPE`（detail 回显客户端发送的 Content-Type）；未匹配路由统一 404 `COMMON.RESOURCE_NOT_FOUND`；兜底异常统一 500 `COMMON.INTERNAL_ERROR` 且 `detail` 只给安全消息，原始异常与堆栈只随 traceId 写日志。协议级客户端错误必须精确渲染为对应 4xx，不得落入兜底 500。
 
 ### 8.2 Trace ID
 

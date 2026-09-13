@@ -25,6 +25,10 @@ dependencies {
     // 零基础设施依赖, 不把发布/消费原语与 Redis 运行时传递给契约消费方
     api(project(AspenProjects.COMMON_GATEWAY_CONTRACT))
 
+    // 字典管理契约的路由套件注解 (@GetRoute/@PostRoute 等) 出现在契约接口方法签名上;
+    // route 零项目依赖、仅 spring-web 注解 API, 与 core 同级安全
+    api(project(AspenProjects.COMMON_ROUTE))
+
     // 仅保留 DTO, VO, HTTP 契约和校验所需 API, 不引入任何运行时基础设施;
     // Feign Client 等到真实消费方服务随其 Cloud 设施一起发布, 避免把 openfeign 运行时传染给全部使用方
     api(libs.spring.web)

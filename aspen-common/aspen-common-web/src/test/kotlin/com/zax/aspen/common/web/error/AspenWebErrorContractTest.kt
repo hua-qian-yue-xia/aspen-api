@@ -76,6 +76,18 @@ class AspenWebErrorContractTest {
         assertFalse(body.contains("10.0.0.1"), "兜底响应不得泄露内部地址")
     }
 
+    /** 验证服务层 require 校验失败渲染 400 并外发面向调用方的消息 */
+    @Test
+    fun `service require failure renders bad request`() {
+        mockMvc.get("/error/require").andExpect {
+            status { isBadRequest() }
+            content { contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON) }
+            jsonPath("$.code") { value("COMMON.INVALID_ARGUMENT") }
+            jsonPath("$.detail") { value("字典编码已存在: gender") }
+            jsonPath("$.traceId") { exists() }
+        }
+    }
+
     /** 验证未匹配路由渲染为 404 Problem Details */
     @Test
     fun `unknown path renders not found problem`() {

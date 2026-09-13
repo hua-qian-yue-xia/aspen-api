@@ -38,6 +38,10 @@ class FixtureErrorController(
     @GetMapping("/error/crash")
     fun `crash endpoint`(): Nothing = throw IllegalStateException("jdbc:mysql://10.0.0.1:3306 password=hunter2")
 
+    /** 抛出服务层 require 校验惯用法的 IllegalArgumentException, 断言渲染 400 而非兜底 500 */
+    @GetMapping("/error/require")
+    fun `require endpoint`(): Nothing = throw IllegalArgumentException("字典编码已存在: gender")
+
     /** 触发 @Valid 请求体校验失败 */
     @PostMapping("/error/validate")
     fun `validate endpoint`(

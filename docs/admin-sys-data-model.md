@@ -1,7 +1,7 @@
 # Admin SYS 数据模型
 
-> 文档状态：字典表已改为全局引用数据并支持 @GenDict 枚举播种, 参数表保持租户级, 路由表与 Redis 发布链路已建立, 分发契约已拆入 gateway-contract 纯契约模块, 字典对象关联已声明 (见 3 节), 路由种子已对齐受众前缀 (V004, 见 7 节); 管理界面与对外查询 API 待建  
-> 文档基线：2026-09-12  
+> 文档状态：字典表已改为全局引用数据并支持 @GenDict 枚举播种, 参数表保持租户级, 路由表与 Redis 发布链路已建立, 分发契约已拆入 gateway-contract 纯契约模块, 字典对象关联已声明 (见 3 节), 路由种子已对齐受众前缀 (V004, 见 7 节); 字典管理 API 已落地 /admin-api/sys/dict/** (路由套件声明, 见 4 节); 管理界面待建  
+> 文档基线：2026-09-13  
 > 关联文档：[Admin UPM 数据模型](./admin-upm-data-model.md)｜[Common 模块设计](./common-module-design.md)
 
 ## 1. 目标与来源
@@ -40,7 +40,7 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/sys/
 - `sys_dict_item` 以 `dict_id + item_value` 唯一, 保证同字典内值不重复, 支持按值幂等 upsert。
 - `dict_group` 为字典分组, 供管理界面按域筛选, 约定小写下划线格式 (如 common/upm); 播种与手工创建均必填, 默认 common。
 - `parent_id` 可空且不设数据库外键, 支持省市区等树形级联场景; 移动子树时由 Service 在一个本地事务内维护层级一致性, 树形字典查询按 `idx_sys_dict_item_parent` 或 `(tenant_id, dict_id, sort_order)` 索引执行。
-- `is_default` 表示表单默认选中项, 同字典下只应有一个默认项, 由 Service 写入时校验。
+- `is_default` 表示表单默认选中项, 同字典下只应有一个默认项, 由字典管理 Service 经「先清后置」在同一事务内校验保证。
 - `tag_type` 已统一为 `color`, 取值为 common-core `EnumColor` 的调色板令牌（5 个语义色与 11 个调色板色）或 `#RRGGBB` 色值, 与业务枚举的 `color` 共用同一套约定, 支撑取值较多的字典项区分展示; `css_class` 保存自定义样式类; 两者只影响展示, 不参与业务判断。
 - 字典翻译缓存以 `dict_code` 为缓存键并定义失效策略, 缓存不是权威数据。
 
@@ -49,7 +49,7 @@ services/aspen-admin/aspen-admin-biz/src/main/resources/db/migration/sys/
 - `@GenDict(code, name, group)` 标注在 `AspenEnum` 枚举上声明字典镜像: code 对应 `dict_code`, name 对应 `dict_name`, group 对应 `dict_group`; 字典项由枚举常量生成, `item_value=code`、`item_label=description`、`color=color`、`sort_order` 取声明顺序。
 - 链路: common-gen 在启动时扫描并把目录投递给容器内的 `GenDictSink` (通用 Runner 属于 common-gen, 使用方只提供 Sink 实现), Admin 的 Sink 实现经 service.sys 直接落库; 其他服务经 admin-api 的 `POST /internal/gen/dict-report` 上报, 由 `aspen.gen.dict.enabled` 控制, 默认关闭, 生产环境禁止开启。admin-api 只发布 MVC 契约, Feign 客户端随首个消费方服务及其 Cloud 设施一起落地——把 openfeign 注解放进 api 模块会经 implementation 传染到全部消费方运行时, 在没有完整 Spring Cloud Starter 时启动即失败。
 - 播种幂等: 默认 `create-missing` 只新增缺失的字典与字典项, 绝不修改已有行, 保护运营对展示的定制; `resync` 强制回写 dict_name、dict_group、item_label、color、sort_order, 不触碰 status、is_default、css_class 与 parent_id; 枚举只增不减, 不清理孤儿字典项。
-- 生成的字典一律 `is_built_in=true`, 其字典项禁止运营增删值, 只允许调整展示属性, 由未来的字典管理 Service 强制校验——枚举仍是唯一权威取值来源, 字典只是展示镜像。
+- 生成的字典一律 `is_built_in=true`, 其字典项禁止运营增删值, 只允许调整展示属性, 已由字典管理 Service (SysDictService) 强制——内置字典禁止删除与停用、其字典项禁止增删与停用; 枚举仍是唯一权威取值来源, 字典只是展示镜像。管理端点为 `/admin-api/sys/dict/**` 与 `/admin-api/sys/dict/item/**` (契约 admin-api `contract/sys`, 经 aspen-common-route 路由套件声明); 字典编码与字典项值一经使用即被逻辑删除行永久占用; 字典项值、所属字典与父项创建后不可修改 (改值需新建项并废弃旧项, 子树移动属二期)。
 - 上报端点属于 internal 契约, 不经网关暴露; v1 无鉴权, 依赖「默认关闭 + 网络不暴露」兜底, auth 服务就绪后补齐。
 
 ## 6. 参数设计
